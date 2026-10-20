@@ -11,6 +11,7 @@ const {
   withProjectBuildGradle,
   withInfoPlist,
   withXcodeProject,
+  withPodfileProperties,
   AndroidConfig,
 } = require('expo/config-plugins');
 
@@ -169,6 +170,12 @@ function withMapboxNavigation(config, props = {}) {
       cfg.modResults.NSLocationWhenInUseUsageDescription =
         'Your location is used to show you on the map and to guide you with turn-by-turn navigation.';
     }
+    return cfg;
+  });
+
+  // iOS: React Native recommends dynamic frameworks for Swift Package Manager dependencies (Mapbox is SPM-only on iOS).
+  config = withPodfileProperties(config, (cfg) => {
+    if (!cfg.modResults['ios.useFrameworks']) cfg.modResults['ios.useFrameworks'] = 'dynamic';
     return cfg;
   });
 

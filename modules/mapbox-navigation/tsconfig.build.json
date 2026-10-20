@@ -1,0 +1,14 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "outDir": "build",
+    "rootDir": ".",
+    "declaration": true,
+    "noEmit": false,
+    "noEmitOnError": false,
+    "skipLibCheck": true,
+    "jsx": "react-jsx"
+  },
+  "include": ["index.ts", "src"],
+  "exclude": ["build", "android", "ios", "node_modules"]
+}
