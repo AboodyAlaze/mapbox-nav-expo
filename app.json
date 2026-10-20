@@ -1,0 +1,46 @@
+{
+  "expo": {
+    "name": "Mapbox Nav",
+    "slug": "mapbox-nav-expo",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "android": {
+      "package": "com.mapboxnav.demo",
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "useFrameworks": "dynamic"
+          }
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow $(PRODUCT_NAME) to use your location for navigation."
+        }
+      ],
+      [
+        "./modules/mapbox-navigation/app.plugin.js",
+        {
+          "accessToken": ""
+        }
+      ]
+    ],
+    "ios": {
+      "bundleIdentifier": "com.mapboxnav.demo",
+      "supportsTablet": true
+    }
+  }
+}

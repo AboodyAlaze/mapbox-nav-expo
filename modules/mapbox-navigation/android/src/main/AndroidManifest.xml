@@ -1,0 +1,5 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <!-- Location / foreground-service / notification permissions come from the Mapbox
+       Navigation SDK manifest and are merged automatically.
+       The access token meta-data is injected by the config plugin (app.plugin.js). -->
+</manifest>

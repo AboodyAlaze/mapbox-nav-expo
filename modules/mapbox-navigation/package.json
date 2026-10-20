@@ -1,0 +1,8 @@
+{
+  "name": "mapbox-navigation",
+  "version": "1.0.0",
+  "description": "Mapbox Navigation SDK (Android, v3) as an Expo module",
+  "main": "index.ts",
+  "types": "index.ts",
+  "license": "MIT"
+}
