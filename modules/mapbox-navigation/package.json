@@ -1,7 +1,7 @@
 {
   "name": "expo-mapbox-nav",
-  "version": "1.0.0",
-  "description": "Mapbox Navigation SDK v3 for Expo (Android + iOS): turn-by-turn navigation, pressable SVG markers, <Camera/>, dark mode and a 3D vehicle puck.",
+  "version": "2.0.0",
+  "description": "Mapbox map + turn-by-turn navigation for Expo (Android + iOS). Navigation runs in TypeScript (Directions API) \u2013 no Navigation SDK, no per-user navigation billing.",
   "main": "build/index.js",
   "react-native": "index.ts",
   "types": "build/index.d.ts",
@@ -20,19 +20,22 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "clean": "rm -rf build",
-    "prepublishOnly": "npm run clean && npm run build"
+    "prepublishOnly": "npm run clean && npm run build",
+    "test": "tsx --test __tests__/*.test.ts"
   },
   "keywords": [
+    "android",
+    "directions-api",
     "expo",
-    "expo-modules",
     "expo-config-plugin",
-    "react-native",
+    "expo-modules",
+    "ios",
     "mapbox",
     "mapbox-navigation",
-    "turn-by-turn",
     "navigation",
-    "android",
-    "ios"
+    "no-navigation-sdk",
+    "react-native",
+    "turn-by-turn"
   ],
   "repository": {
     "type": "git",
@@ -50,6 +53,9 @@
     "react": "*",
     "react-native": ">=0.88.0",
     "react-native-svg": ">=15.0.0",
-    "react-native-view-shot": ">=4.0.0"
+    "react-native-view-shot": ">=4.0.0",
+    "expo-location": ">=58.0.0",
+    "expo-speech": ">=58.0.0",
+    "expo-keep-awake": ">=58.0.0"
   }
 }

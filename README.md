@@ -1,18 +1,20 @@
 # mapbox-nav-expo
 
-Demo app + the **`expo-mapbox-nav`** module: Mapbox Navigation SDK v3 for Expo (Android + iOS) with turn-by-turn navigation,
+Demo app + the **`expo-mapbox-nav`** module: Mapbox map and turn-by-turn navigation for Expo (Android + iOS) —
 pressable SVG markers, `<Camera/>`, dark mode and a 3D vehicle puck.
 
-- The module lives in [`modules/mapbox-navigation`](modules/mapbox-navigation) (full English docs in its README).
-- The root is an Expo SDK 58 demo app that uses it.
+**v2:** no Mapbox Navigation SDK. The navigation engine (routes, banners, voice, rerouting, arrival, simulation) is TypeScript on top of the
+Mapbox Directions API; only the *Maps* SDK is native. No per-user navigation fees – you pay per route request. Details and limitations are in
+[`modules/mapbox-navigation/README.md`](modules/mapbox-navigation/README.md).
 
 ```bash
 npm install
-MAPBOX_ACCESS_TOKEN=pk.xxxxx npx expo prebuild --clean   # public token, never commit it
+npm test                                                  # engine unit tests
+MAPBOX_ACCESS_TOKEN=pk.xxxxx npx expo prebuild --clean    # public token, never commit it
 npx expo run:ios --device     # or: npx expo run:android --device
 ```
 
-> Development build only (no Expo Go). iOS Navigation SDK is pinned to 3.26.0, Android to 3.33.0. The Arabic notes below describe the same project in more detail.
+> Development build only (no Expo Go). Maps SDK: Android 11.33.0, iOS 11.26.0.
 
 ---
 

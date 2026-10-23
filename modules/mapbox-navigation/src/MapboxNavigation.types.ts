@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import type { RouteProvider } from './engine/directions';
 import type { StyleProp, ViewStyle } from 'react-native';
 
 export type Coordinate = {
@@ -142,14 +143,20 @@ export type MapboxNavigationViewProps = {
   theme?: ThemeMode;
   /** Distance units for banner / speed sign / voice. Default: from device locale. */
   units?: Units;
-  /** Show Mapbox's official maneuver banner (turn icons, lanes) while navigating. Default true. */
+  /** @deprecated No native banner anymore – use the NavigationUI components (NavigationTopBanner…). Ignored. */
   showManeuverBanner?: boolean;
-  /** Show Mapbox's official speed-limit sign. Default true. */
+  /** @deprecated Use <SpeedLimitSign/>. Ignored. */
   showSpeedLimit?: boolean;
-  /** Space (dp) kept free at the top for the status bar. Default 48. */
+  /** @deprecated Ignored. */
   topInset?: number;
-  /** Distance (dp) of the speed-limit sign from the bottom edge, i.e. above your bottom panel. Default 210. */
+  /** @deprecated Ignored. */
   speedLimitBottomMargin?: number;
+  /** Public Mapbox token for route requests. Defaults to the token set through the config plugin. */
+  accessToken?: string;
+  /** Request alternative routes (drawn in grey). Default true. */
+  alternatives?: boolean;
+  /** Custom route source (your own OSRM / Valhalla server…). Default: Mapbox Directions API. */
+  routeProvider?: RouteProvider;
   /** Start point. When omitted the current GPS location is used. */
   origin?: Coordinate;
   /** Final destination. */

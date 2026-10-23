@@ -4,12 +4,11 @@ plugins {
 }
 
 group = 'expo.modules.mapboxnavigation'
-version = '1.0.0'
+version = '2.0.0'
 
 // ---------------------------------------------------------------------------
-// Mapbox Maven repository.
-// Added on rootProject.allprojects so that the transitive Mapbox artifacts
-// (Maps SDK, common, navigator...) resolve from the app project as well.
+// Mapbox Maven repository (Maps SDK). Added on rootProject.allprojects so the transitive
+// Mapbox artifacts resolve from the app project as well.
 // A downloads token (sk.… with DOWNLOADS:READ) is only attached when provided:
 //   - gradle property  MAPBOX_DOWNLOADS_TOKEN   (~/.gradle/gradle.properties)
 //   - or env variable  MAPBOX_DOWNLOADS_TOKEN
@@ -32,14 +31,14 @@ rootProject.allprojects {
   }
 }
 
-// Navigation SDK version (override with -PmapboxNavigationVersion=x.y.z or in gradle.properties)
-def mapboxNavigationVersion = project.findProperty('mapboxNavigationVersion') ?: '3.33.0'
+// Maps SDK version (override with -PmapboxMapsVersion=x.y.z or in gradle.properties)
+def mapboxMapsVersion = project.findProperty('mapboxMapsVersion') ?: '11.33.0'
 
 android {
   namespace "expo.modules.mapboxnavigation"
   defaultConfig {
     versionCode 1
-    versionName "1.0.0"
+    versionName "2.0.0"
   }
   lintOptions {
     abortOnError false
@@ -47,10 +46,6 @@ android {
 }
 
 dependencies {
-  // All-in-one artifact: navigation core + tripdata + voice + ui-maps (+ Maps SDK v11 transitively)
-  api "com.mapbox.navigationcore:android:${mapboxNavigationVersion}"
-  // Official Mapbox UI: maneuver banner (turn icons, lanes), speed-limit sign, ...
-  api "com.mapbox.navigationcore:ui-components:${mapboxNavigationVersion}"
-  // Needed for the Material theme the Mapbox views are inflated with
-  implementation "com.google.android.material:material:1.12.0"
+  // Only the MAP. Navigation (routing, banners, voice, rerouting) runs in TypeScript – no Navigation SDK.
+  api "com.mapbox.maps:android:${mapboxMapsVersion}"
 }

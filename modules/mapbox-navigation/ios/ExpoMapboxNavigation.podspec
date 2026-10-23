@@ -9,7 +9,7 @@ Pod::Spec.new do |s|
   s.description    = package['description']
   s.license        = package['license']
   s.author         = 'FS'
-  s.homepage       = 'https://github.com/mapbox/mapbox-navigation-ios'
+  s.homepage       = 'https://github.com/AboodyAlaze/mapbox-nav-expo'
   s.platforms      = { :ios => '16.4' }
   s.swift_version  = '5.9'
   s.source         = { git: 'https://github.com/mapbox/mapbox-navigation-ios.git' }
@@ -29,13 +29,12 @@ Pod::Spec.new do |s|
     'MapboxNavigationModels' => ['models/*.glb']
   }
 
-  # Mapbox Navigation SDK v3 (Core + Maps) comes from Swift Package Manager.
-  # `spm_dependency` is provided by React Native (>= 0.75) inside the Podfile.
+  # Mapbox Maps SDK (the MAP only – navigation runs in TypeScript, there is no Navigation SDK anymore).
+  # Comes from Swift Package Manager; `spm_dependency` is provided by React Native (>= 0.75) inside the Podfile.
+  # 11.26.0 is the newest stable release published on GitHub.
   spm_dependency(s,
-    url: 'https://github.com/mapbox/mapbox-navigation-ios.git',
-    # 3.26.0 is the newest release whose dependencies (Maps 11.26.0, NavigationNative 324.26.0, Turf 4.0.0)
-    # are all published on GitHub. Newer tags (3.27+) need Maps tags that are not public.
-    requirement: { kind: 'exactVersion', version: '3.26.0' },
-    products: ['MapboxNavigationCore']
+    url: 'https://github.com/mapbox/mapbox-maps-ios.git',
+    requirement: { kind: 'exactVersion', version: '11.26.0' },
+    products: ['MapboxMaps']
   )
 end

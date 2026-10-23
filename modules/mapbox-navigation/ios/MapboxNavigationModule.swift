@@ -62,14 +62,6 @@ public class MapboxNavigationModule: Module {
     View(MapboxNavigationView.self) {
       Events(
         "onReady",
-        "onLocation",
-        "onRouteReady",
-        "onRouteError",
-        "onNavigationStarted",
-        "onNavigationStopped",
-        "onProgress",
-        "onOffRoute",
-        "onArrival",
         "onCameraModeChanged",
         "onError",
         "onMapPress",
@@ -77,57 +69,55 @@ public class MapboxNavigationModule: Module {
         "onMarkerPress"
       )
 
+      // ---- look & feel
       Prop("styleURL") { (view: MapboxNavigationView, value: String?) in view.setStyleUri(value) }
-      Prop("origin") { (view: MapboxNavigationView, value: CoordinateRecord?) in
-        view.origin = value.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) }
-      }
-      Prop("destination") { (view: MapboxNavigationView, value: CoordinateRecord?) in
-        view.setDestination(value.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) })
-      }
-      Prop("waypoints") { (view: MapboxNavigationView, value: [CoordinateRecord]?) in
-        view.waypoints = (value ?? []).map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) }
-      }
-      Prop("profile") { (view: MapboxNavigationView, value: String?) in view.profile = value ?? "driving-traffic" }
-      Prop("language") { (view: MapboxNavigationView, value: String?) in view.setLanguage(value) }
-      Prop("units") { (view: MapboxNavigationView, value: String?) in view.units = value }
-      Prop("simulate") { (view: MapboxNavigationView, value: Bool?) in view.simulate = value ?? false }
-      Prop("simulationSpeed") { (_: MapboxNavigationView, _: Double?) in /* not supported on iOS */ }
-      Prop("muted") { (view: MapboxNavigationView, value: Bool?) in view.setMuted(value ?? false) }
-
       Prop("mapStyle") { (view: MapboxNavigationView, value: String?) in view.setMapStyle(value) }
       Prop("theme") { (view: MapboxNavigationView, value: String?) in view.setTheme(value) }
       Prop("vehicle") { (view: MapboxNavigationView, value: String?) in view.setVehicle(value) }
       Prop("vehicleScale") { (view: MapboxNavigationView, value: Double?) in view.setVehicleScale(value) }
       Prop("vehicleRotation") { (view: MapboxNavigationView, value: Double?) in view.setVehicleRotation(value) }
 
-      Prop("showsUserLocation") { (view: MapboxNavigationView, value: Bool?) in
-        view.setShowsUserLocation(value ?? true)
-      }
-      Prop("showDestinationPin") { (view: MapboxNavigationView, value: Bool?) in
-        view.setShowDestinationPin(value ?? true)
+      // ---- react-native-maps style props
+      Prop("showsUserLocation") { (view: MapboxNavigationView, value: Bool?) in view.setShowsUserLocation(value ?? true) }
+      Prop("showDestinationPin") { (view: MapboxNavigationView, value: Bool?) in view.setShowDestinationPin(value ?? true) }
+      Prop("destination") { (view: MapboxNavigationView, value: CoordinateRecord?) in
+        view.setDestination(value.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) })
       }
       Prop("zoomEnabled") { (view: MapboxNavigationView, value: Bool?) in view.setZoomEnabled(value ?? true) }
       Prop("scrollEnabled") { (view: MapboxNavigationView, value: Bool?) in view.setScrollEnabled(value ?? true) }
       Prop("rotateEnabled") { (view: MapboxNavigationView, value: Bool?) in view.setRotateEnabled(value ?? true) }
       Prop("pitchEnabled") { (view: MapboxNavigationView, value: Bool?) in view.setPitchEnabled(value ?? true) }
 
-      // Mapbox's own banner / speed sign are Android-only; the JS UI (NavigationUI) is used on both platforms.
-      Prop("showManeuverBanner") { (_: MapboxNavigationView, _: Bool?) in }
-      Prop("showSpeedLimit") { (_: MapboxNavigationView, _: Bool?) in }
-      Prop("topInset") { (_: MapboxNavigationView, _: Double?) in }
-      Prop("speedLimitBottomMargin") { (_: MapboxNavigationView, _: Double?) in }
-
+      // ---- camera + markers
       Prop("camera") { (view: MapboxNavigationView, value: CameraRecord?) in view.applyCamera(value) }
       Prop("markers") { (view: MapboxNavigationView, value: [MarkerRecord]?) in view.setMarkers(value ?? []) }
       Prop("markerImages") { (view: MapboxNavigationView, value: [String: String]?) in
         view.setMarkerImages(value ?? [:])
       }
 
-      AsyncFunction("fetchRoute") { (view: MapboxNavigationView) in view.fetchRoute(startAfter: false) }
-      AsyncFunction("startNavigation") { (view: MapboxNavigationView) in view.startNavigation() }
-      AsyncFunction("stopNavigation") { (view: MapboxNavigationView) in view.stopNavigation() }
-      AsyncFunction("recenter") { (view: MapboxNavigationView) in view.recenter() }
-      AsyncFunction("showOverview") { (view: MapboxNavigationView) in view.showOverview() }
+      // ---- primitives driven by the TypeScript NavigationController
+      AsyncFunction("updateLocation") {
+        (view: MapboxNavigationView, lat: Double, lng: Double, bearing: Double, accuracy: Double, duration: Double) in
+        view.updateLocation(lat: lat, lng: lng, bearing: bearing, accuracy: accuracy)
+      }
+      AsyncFunction("followCamera") {
+        (view: MapboxNavigationView, lat: Double, lng: Double, bearing: Double, zoom: Double, pitch: Double, duration: Double) in
+        view.followCamera(lat: lat, lng: lng, bearing: bearing, zoom: zoom, pitch: pitch, durationMs: duration)
+      }
+      AsyncFunction("fitCamera") {
+        (view: MapboxNavigationView, coordinates: [[Double]], top: Double, right: Double, bottom: Double, left: Double, duration: Double) in
+        view.fitCamera(coordinates, top: top, right: right, bottom: bottom, left: left, durationMs: duration)
+      }
+      AsyncFunction("setRoute") { (view: MapboxNavigationView, geoJson: String, gradient: String) in
+        view.setRoute(geoJson: geoJson, gradient: gradient)
+      }
+      AsyncFunction("setAlternatives") { (view: MapboxNavigationView, geoJson: String) in
+        view.setAlternatives(geoJson: geoJson)
+      }
+      AsyncFunction("setRouteProgress") { (view: MapboxNavigationView, fraction: Double) in
+        view.setRouteProgress(fraction)
+      }
+      AsyncFunction("clearRoute") { (view: MapboxNavigationView) in view.clearRoute() }
       AsyncFunction("setCamera") { (view: MapboxNavigationView, camera: CameraRecord) in view.applyCamera(camera) }
     }
   }

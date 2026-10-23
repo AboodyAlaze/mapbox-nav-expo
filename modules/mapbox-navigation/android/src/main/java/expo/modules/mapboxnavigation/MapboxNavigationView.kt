@@ -1,211 +1,117 @@
-@file:OptIn(ExperimentalPreviewMapboxNavigationAPI::class)
-
 package expo.modules.mapboxnavigation
 
+import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.os.SystemClock
-import android.util.Base64
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
-import android.view.ContextThemeWrapper
-import android.view.Gravity
-import android.view.View
+import android.os.SystemClock
+import android.util.Base64
 import android.view.ViewGroup
+import android.view.animation.LinearInterpolator
 import android.widget.FrameLayout
-import com.mapbox.api.directions.v5.DirectionsCriteria
-import com.mapbox.api.directions.v5.models.RouteOptions
-import com.mapbox.bindgen.Expected
-import com.mapbox.common.location.Location
+import com.mapbox.bindgen.Value
 import com.mapbox.geojson.Feature
 import com.mapbox.geojson.Point
 import com.mapbox.maps.CameraBoundsOptions
 import com.mapbox.maps.CameraOptions
 import com.mapbox.maps.EdgeInsets
+import com.mapbox.maps.LayerPosition
 import com.mapbox.maps.MapView
 import com.mapbox.maps.RenderedQueryGeometry
 import com.mapbox.maps.RenderedQueryOptions
 import com.mapbox.maps.ScreenBox
 import com.mapbox.maps.ScreenCoordinate
-import com.mapbox.maps.plugin.LocationPuck2D
+import com.mapbox.maps.extension.style.layers.properties.generated.IconAnchor
 import com.mapbox.maps.plugin.LocationPuck3D
 import com.mapbox.maps.plugin.ModelScaleMode
+import com.mapbox.maps.plugin.animation.CameraAnimationsLifecycleListener
+import com.mapbox.maps.plugin.animation.CameraAnimatorType
 import com.mapbox.maps.plugin.animation.MapAnimationOptions.Companion.mapAnimationOptions
+import com.mapbox.maps.plugin.animation.camera
 import com.mapbox.maps.plugin.animation.easeTo
 import com.mapbox.maps.plugin.animation.flyTo
-import com.mapbox.maps.ImageHolder
-import com.mapbox.maps.plugin.animation.camera
 import com.mapbox.maps.plugin.annotation.annotations
 import com.mapbox.maps.plugin.annotation.generated.OnPointAnnotationClickListener
 import com.mapbox.maps.plugin.annotation.generated.PointAnnotation
 import com.mapbox.maps.plugin.annotation.generated.PointAnnotationManager
-import com.mapbox.maps.plugin.locationcomponent.LocationComponentConstants
 import com.mapbox.maps.plugin.annotation.generated.PointAnnotationOptions
 import com.mapbox.maps.plugin.annotation.generated.createPointAnnotationManager
-import com.mapbox.maps.extension.style.layers.properties.generated.IconAnchor
 import com.mapbox.maps.plugin.gestures.OnMapClickListener
 import com.mapbox.maps.plugin.gestures.OnMapLongClickListener
 import com.mapbox.maps.plugin.gestures.gestures
-import com.mapbox.maps.plugin.scalebar.scalebar
+import com.mapbox.maps.plugin.locationcomponent.LocationConsumer
+import com.mapbox.maps.plugin.locationcomponent.LocationProvider
+import com.mapbox.maps.plugin.locationcomponent.createDefault2DPuck
 import com.mapbox.maps.plugin.locationcomponent.location
-import com.mapbox.navigation.base.ExperimentalPreviewMapboxNavigationAPI
-import com.mapbox.navigation.base.extensions.applyDefaultNavigationOptions
-import com.mapbox.navigation.base.extensions.applyLanguageAndVoiceUnitOptions
-import com.mapbox.navigation.base.formatter.DistanceFormatterOptions
-import com.mapbox.navigation.base.speed.model.SpeedUnit
-import com.mapbox.navigation.base.formatter.UnitType
-import com.mapbox.navigation.core.formatter.MapboxDistanceFormatter
-import com.mapbox.navigation.tripdata.maneuver.api.MapboxManeuverApi
-import com.mapbox.navigation.tripdata.speedlimit.api.MapboxSpeedInfoApi
-import com.mapbox.navigation.tripdata.speedlimit.model.SpeedInfoValue
-import com.mapbox.navigation.ui.components.maneuver.view.MapboxManeuverView
-import com.mapbox.navigation.ui.components.speedlimit.model.MapboxSpeedInfoOptions
-import com.mapbox.navigation.ui.components.speedlimit.view.MapboxSpeedInfoView
-import com.mapbox.navigation.base.options.NavigationOptions
-import com.mapbox.navigation.base.route.NavigationRoute
-import com.mapbox.navigation.base.route.NavigationRouterCallback
-import com.mapbox.navigation.base.route.RouterFailure
-import com.mapbox.navigation.base.trip.model.RouteProgress
-import com.mapbox.navigation.core.MapboxNavigation
-import com.mapbox.navigation.core.MapboxNavigationProvider
-import com.mapbox.navigation.core.arrival.ArrivalObserver
-import com.mapbox.navigation.core.directions.session.RoutesObserver
-import com.mapbox.navigation.core.directions.session.RoutesUpdatedResult
-import com.mapbox.navigation.core.replay.route.ReplayRouteMapper
-import com.mapbox.navigation.core.trip.session.LocationMatcherResult
-import com.mapbox.navigation.core.trip.session.LocationObserver
-import com.mapbox.navigation.core.trip.session.OffRouteObserver
-import com.mapbox.navigation.core.trip.session.RouteProgressObserver
-import com.mapbox.navigation.core.trip.session.VoiceInstructionsObserver
-import com.mapbox.navigation.base.trip.model.RouteLegProgress
-import com.mapbox.navigation.ui.base.util.MapboxNavigationConsumer
-import com.mapbox.navigation.ui.maps.NavigationStyles
-import com.mapbox.navigation.ui.maps.camera.NavigationCamera
-import com.mapbox.navigation.ui.maps.camera.data.MapboxNavigationViewportDataSource
-import com.mapbox.navigation.ui.maps.camera.lifecycle.NavigationBasicGesturesHandler
-import com.mapbox.navigation.ui.maps.camera.state.NavigationCameraState
-import com.mapbox.navigation.ui.maps.location.NavigationLocationProvider
-import com.mapbox.navigation.ui.maps.route.line.api.MapboxRouteLineApi
-import com.mapbox.navigation.ui.maps.route.line.api.MapboxRouteLineView
-import com.mapbox.navigation.ui.maps.route.line.model.MapboxRouteLineApiOptions
-import com.mapbox.navigation.ui.maps.route.line.model.MapboxRouteLineViewOptions
-import com.mapbox.navigation.voice.api.MapboxSpeechApi
-import com.mapbox.navigation.voice.api.MapboxVoiceInstructionsPlayer
-import com.mapbox.navigation.voice.model.SpeechAnnouncement
-import com.mapbox.navigation.voice.model.SpeechError
-import com.mapbox.navigation.voice.model.SpeechValue
-import com.mapbox.navigation.voice.model.SpeechVolume
+import com.mapbox.maps.plugin.scalebar.scalebar
 import expo.modules.kotlin.AppContext
 import expo.modules.kotlin.viewevent.EventDispatcher
 import expo.modules.kotlin.views.ExpoView
-import java.util.Locale
+import java.util.concurrent.CopyOnWriteArraySet
 
 /**
- * Native view that renders a Mapbox map and drives the Mapbox Navigation SDK (v3):
- *  - location puck + navigation camera (following / overview / idle)
- *  - route line rendering (primary + alternatives)
- *  - turn-by-turn progress events (banner text, distances, ETA)
- *  - voice guidance (Mapbox Voice API with TTS fallback)
- *  - route simulation (replay) for testing without driving
+ * The map. Everything navigation-related (routes, banners, voice, rerouting, arrival) runs in TypeScript;
+ * this view only draws: tiles, the vehicle puck (position pushed from JS), the route line, markers and the camera.
  */
 @SuppressLint("ViewConstructor", "MissingPermission")
 class MapboxNavigationView(context: Context, appContext: AppContext) : ExpoView(context, appContext) {
 
   // ---------------------------------------------------------------- events
   private val onReady by EventDispatcher<Map<String, Any>>()
-  private val onLocation by EventDispatcher<Map<String, Any>>()
-  private val onRouteReady by EventDispatcher<Map<String, Any>>()
-  private val onRouteError by EventDispatcher<Map<String, Any>>()
-  private val onNavigationStarted by EventDispatcher<Map<String, Any>>()
-  private val onNavigationStopped by EventDispatcher<Map<String, Any>>()
-  private val onProgress by EventDispatcher<Map<String, Any>>()
-  private val onOffRoute by EventDispatcher<Map<String, Any>>()
-  private val onArrival by EventDispatcher<Map<String, Any>>()
   private val onCameraModeChanged by EventDispatcher<Map<String, Any>>()
   private val onError by EventDispatcher<Map<String, Any>>()
   private val onMapPress by EventDispatcher<Map<String, Any>>()
   private val onMapLongPress by EventDispatcher<Map<String, Any>>()
   private val onMarkerPress by EventDispatcher<Map<String, Any>>()
 
-  // ---------------------------------------------------------------- props (set from JS)
+  // ---------------------------------------------------------------- props
   private var explicitStyleUri: String? = null
   private var mapStyle: String = "streets"
+  private var theme: String = "system"
   private var vehicle: String = "car"
   private var vehicleScale: Double = 8.0
   private var vehicleRotation: Double = 0.0
-  private var theme: String = "system"
-  private var units: String? = null
-  private var showManeuverBanner: Boolean = true
-  private var showSpeedLimit: Boolean = true
-  private var topInsetDp: Double = 48.0
-  private var speedLimitBottomMarginDp: Double = 210.0
-  private var loadedStyleUri: String? = null
-  private var currentNight: Boolean = false
-  private var origin: Point? = null
-  private var destination: Point? = null
-  private var waypoints: List<Point> = emptyList()
-  private var profile: String = DirectionsCriteria.PROFILE_DRIVING_TRAFFIC
-  private var language: String = Locale.getDefault().language.ifEmpty { "en" }
-  private var simulate: Boolean = false
-  private var muted: Boolean = false
-  private var simulationSpeed: Double = 1.0
-
-  // ---------------------------------------------------------------- state
-  private val density = context.resources.displayMetrics.density
-  private val mapView: MapView
-  private val navigationLocationProvider = NavigationLocationProvider()
-  private val viewportDataSource: MapboxNavigationViewportDataSource
-  private val navigationCamera: NavigationCamera
-  private val routeLineApi = MapboxRouteLineApi(MapboxRouteLineApiOptions.Builder().build())
-  private var routeLineView = createRouteLineView(LocationComponentConstants.MODEL_LAYER)
-  private val container = FrameLayout(context)
-  private var maneuverView: MapboxManeuverView? = null
-  private var speedInfoView: MapboxSpeedInfoView? = null
-  private var lastSpeedInfo: SpeedInfoValue? = null
-  private var distanceFormatterOptions: DistanceFormatterOptions =
-    DistanceFormatterOptions.Builder(context).build()
-  private var maneuverApi = MapboxManeuverApi(MapboxDistanceFormatter(distanceFormatterOptions))
-  private val speedInfoApi = MapboxSpeedInfoApi()
-  private var pointAnnotationManager: PointAnnotationManager? = null   // destination pin
-  private var markerManager: PointAnnotationManager? = null             // user markers (<Marker/>)
   private var showsUserLocation = true
   private var showDestinationPin = true
-  private var lastEmittedMarkerId: String? = null
-  private var lastEmittedMarkerAt = 0L
   private var zoomEnabled = true
   private var scrollEnabled = true
   private var rotateEnabled = true
   private var pitchEnabled = true
+  private var destination: Point? = null
+
+  // ---------------------------------------------------------------- state
+  private val density = context.resources.displayMetrics.density
+  private val container = FrameLayout(context)
+  private val mapView: MapView
+  private val locationProvider = ExternalLocationProvider()
+  private var loadedStyleUri: String? = null
+  private var currentNight = false
+  private var nativeMode = "idle"
+  private var cameraControlledByJs = false
+
+  // route line (re-applied after every style load)
+  private var routeGeoJson: String? = null
+  private var routeGradient: String? = null
+  private var alternativesGeoJson: String? = null
+  private var routeTrim = 0.0
+
+  // markers
+  private var pointAnnotationManager: PointAnnotationManager? = null // destination pin
+  private var markerManager: PointAnnotationManager? = null // <Marker/>
   private var markerSpecs: List<MarkerSpec> = emptyList()
   private val markerBitmaps = mutableMapOf<String, Bitmap>()
   private val markerAnnotations = mutableMapOf<String, PointAnnotation>()
   private val markerSignatures = mutableMapOf<String, String>()
   private val annotationToMarker = mutableMapOf<String, String>()
   private var lastMarkerPressAt = 0L
-  private var cameraControlledByJs = false
+  private var lastEmittedMarkerId: String? = null
+  private var lastEmittedMarkerAt = 0L
   private var pinBitmap: Bitmap? = null
-  private val gesturesHandler: NavigationBasicGesturesHandler
-
-  private var mapboxNavigation: MapboxNavigation? = null
-  private var isSetUp = false
-  private var isDestroyed = false
-  private var isNavigating = false
-  private var pendingStart = false
-  private var firstLocationReceived = false
-  private var lastLocation: Location? = null
-  private var currentRoutes: List<NavigationRoute> = emptyList()
-  private var lastBannerPrimary: String? = null
-  private var lastBannerSecondary: String? = null
-  private var lastManeuverType: String? = null
-  private var lastManeuverModifier: String? = null
-  private var requestId: Long = -1L
-
-  private var speechApi: MapboxSpeechApi? = null
-  private var voicePlayer: MapboxVoiceInstructionsPlayer? = null
 
   init {
     MapboxTokenHelper.applyIfNeeded(context)
@@ -217,30 +123,35 @@ class MapboxNavigationView(context: Context, appContext: AppContext) : ExpoView(
       FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
     )
 
-    val mapboxMap = mapView.mapboxMap
     currentNight = resolveNight()
     applyStyle()
 
     mapView.scalebar.enabled = false
     mapView.location.apply {
-      setLocationProvider(navigationLocationProvider)
+      setLocationProvider(locationProvider)
       puckBearingEnabled = true
       enabled = true
     }
     applyPuck()
 
-    viewportDataSource = MapboxNavigationViewportDataSource(mapboxMap)
-    viewportDataSource.followingPadding =
-      EdgeInsets(200.0 * density, 40.0 * density, 160.0 * density, 40.0 * density)
-    viewportDataSource.overviewPadding =
-      EdgeInsets(160.0 * density, 40.0 * density, 160.0 * density, 40.0 * density)
+    // any camera movement not started by us (finger gestures, flyTo…) leaves "following" mode
+    mapView.camera.addCameraAnimationsLifecycleListener(object : CameraAnimationsLifecycleListener {
+      override fun onAnimatorStarting(type: CameraAnimatorType, animator: ValueAnimator, owner: String?) {
+        if (owner != CAMERA_OWNER) emitMode("idle")
+      }
 
-    navigationCamera = NavigationCamera(mapboxMap, mapView.camera, viewportDataSource)
-    gesturesHandler = NavigationBasicGesturesHandler(navigationCamera)
-    mapView.camera.addCameraAnimationsLifecycleListener(gesturesHandler)
-    navigationCamera.registerNavigationCameraStateChangeObserver { state ->
-      onCameraModeChanged(mapOf("mode" to cameraModeName(state)))
-    }
+      override fun onAnimatorEnding(type: CameraAnimatorType, animator: ValueAnimator, owner: String?) {}
+
+      override fun onAnimatorCancelling(type: CameraAnimatorType, animator: ValueAnimator, owner: String?) {}
+
+      override fun onAnimatorInterrupting(
+        type: CameraAnimatorType,
+        runningAnimator: ValueAnimator,
+        runningAnimatorOwner: String?,
+        newAnimator: ValueAnimator,
+        newAnimatorOwner: String?,
+      ) {}
+    })
 
     mapView.gestures.addOnMapClickListener(OnMapClickListener { point ->
       handleMapClick(point)
@@ -259,12 +170,216 @@ class MapboxNavigationView(context: Context, appContext: AppContext) : ExpoView(
       })
     }
     applyGestures()
-    buildOverlays()
+    onReady(mapOf("ready" to true))
   }
 
   /** Let Android lay out the MapView instead of Yoga. */
   override val shouldUseAndroidLayout: Boolean
     get() = true
+
+  override fun onConfigurationChanged(newConfig: Configuration?) {
+    super.onConfigurationChanged(newConfig)
+    refreshTheme()
+  }
+
+  fun cleanup() {
+    runCatching { mapView.onDestroy() }
+  }
+
+  // =============================================================== external location (pushed from JS)
+  private class ExternalLocationProvider : LocationProvider {
+    private val consumers = CopyOnWriteArraySet<LocationConsumer>()
+    private var lastPoint: Point? = null
+    private var lastBearing: Double? = null
+
+    override fun registerLocationConsumer(locationConsumer: LocationConsumer) {
+      if (consumers.add(locationConsumer)) {
+        lastPoint?.let { p ->
+          locationConsumer.onLocationUpdated(p, options = { duration = 0 })
+          lastBearing?.let { b -> locationConsumer.onBearingUpdated(b, options = { duration = 0 }) }
+        }
+      }
+    }
+
+    override fun unRegisterLocationConsumer(locationConsumer: LocationConsumer) {
+      consumers.remove(locationConsumer)
+    }
+
+    fun update(point: Point, bearing: Double?, durationMs: Long) {
+      lastPoint = point
+      if (bearing != null) lastBearing = bearing
+      consumers.forEach { consumer ->
+        consumer.onLocationUpdated(point, options = {
+          duration = durationMs
+          interpolator = LinearInterpolator()
+        })
+        if (bearing != null) {
+          consumer.onBearingUpdated(bearing, options = {
+            duration = durationMs
+            interpolator = LinearInterpolator()
+          })
+        }
+      }
+    }
+  }
+
+  // =============================================================== commands from JS
+  fun updateLocation(lat: Double, lng: Double, bearing: Double, durationMs: Double) {
+    locationProvider.update(
+      Point.fromLngLat(lng, lat),
+      bearing.takeIf { it >= 0.0 && it.isFinite() },
+      durationMs.toLong().coerceAtLeast(0L)
+    )
+  }
+
+  fun followCamera(lat: Double, lng: Double, bearing: Double, zoom: Double, pitch: Double, durationMs: Double) {
+    nativeMode = "following"
+    val padTop = if (pitch > 0.0) mapView.height * 0.34 else 0.0
+    mapView.camera.easeTo(
+      CameraOptions.Builder()
+        .center(Point.fromLngLat(lng, lat))
+        .bearing(bearing)
+        .pitch(pitch)
+        .zoom(zoom)
+        .padding(EdgeInsets(padTop, 0.0, 0.0, 0.0))
+        .build(),
+      mapAnimationOptions {
+        duration(durationMs.toLong().coerceAtLeast(0L))
+        owner(CAMERA_OWNER)
+      }
+    )
+  }
+
+  fun fitCamera(points: List<List<Double>>, top: Double, right: Double, bottom: Double, left: Double, durationMs: Double) {
+    if (points.size < 2) return
+    val coordinates = points.filter { it.size >= 2 }.map { Point.fromLngLat(it[0], it[1]) }
+    if (coordinates.size < 2) return
+    nativeMode = "overview"
+    try {
+      val camera = mapView.mapboxMap.cameraForCoordinates(
+        coordinates,
+        CameraOptions.Builder()
+          .padding(EdgeInsets(top * density, left * density, bottom * density, right * density))
+          .bearing(0.0)
+          .pitch(0.0)
+          .build(),
+        null,
+        null,
+        null
+      )
+      mapView.camera.easeTo(
+        camera,
+        mapAnimationOptions {
+          duration(durationMs.toLong().coerceAtLeast(0L))
+          owner(CAMERA_OWNER)
+        }
+      )
+    } catch (t: Throwable) {
+      onError(mapOf("code" to "FIT_FAILED", "message" to (t.message ?: "Could not fit the route")))
+    }
+  }
+
+  // ---------------------------------------------------------------- route line
+  fun setRoute(geoJson: String, gradient: String) {
+    routeGeoJson = geoJson
+    routeGradient = gradient
+    routeTrim = 0.0
+    applyRoute()
+    updateDestinationPin()
+  }
+
+  fun setAlternatives(geoJson: String) {
+    alternativesGeoJson = geoJson
+    applyRoute()
+  }
+
+  fun setRouteProgress(fraction: Double) {
+    routeTrim = fraction.coerceIn(0.0, 1.0)
+    val style = mapView.mapboxMap.style ?: return
+    val value = Value.fromJson("[0.0,$routeTrim]").value ?: return
+    if (style.styleLayerExists(ROUTE_LINE)) style.setStyleLayerProperty(ROUTE_LINE, "line-trim-offset", value)
+    if (style.styleLayerExists(ROUTE_CASING)) style.setStyleLayerProperty(ROUTE_CASING, "line-trim-offset", value)
+  }
+
+  fun clearRoute() {
+    routeGeoJson = null
+    routeGradient = null
+    alternativesGeoJson = null
+    routeTrim = 0.0
+    updateDestinationPin()
+    val style = mapView.mapboxMap.style ?: return
+    removeRouteLayers(style)
+  }
+
+  private fun removeRouteLayers(style: com.mapbox.maps.Style) {
+    listOf(ROUTE_LINE, ROUTE_CASING, ALT_LINE).forEach { if (style.styleLayerExists(it)) style.removeStyleLayer(it) }
+    listOf(ROUTE_SOURCE, ALT_SOURCE).forEach { if (style.styleSourceExists(it)) style.removeStyleSource(it) }
+  }
+
+  /** Idempotent: (re)creates sources and layers from the last route data. Called again after a style change. */
+  private fun applyRoute() {
+    val style = mapView.mapboxMap.style ?: return
+    val geo = routeGeoJson
+    if (geo == null) {
+      removeRouteLayers(style)
+      return
+    }
+
+    // main route (lineMetrics is required for line-gradient / line-trim-offset)
+    if (style.styleSourceExists(ROUTE_SOURCE)) {
+      style.setStyleSourceProperty(ROUTE_SOURCE, "data", Value(geo))
+    } else {
+      Value.fromJson("""{"type":"geojson","lineMetrics":true,"maxzoom":16,"data":$geo}""").value
+        ?.let { style.addStyleSource(ROUTE_SOURCE, it) }
+    }
+
+    // alternatives
+    val alt = alternativesGeoJson
+    if (alt != null) {
+      if (style.styleSourceExists(ALT_SOURCE)) {
+        style.setStyleSourceProperty(ALT_SOURCE, "data", Value(alt))
+      } else {
+        Value.fromJson("""{"type":"geojson","data":$alt}""").value?.let { style.addStyleSource(ALT_SOURCE, it) }
+      }
+    }
+
+    val below = belowLayerId(style)
+    val position = LayerPosition(null, below, null)
+    val width = """["interpolate",["exponential",1.5],["zoom"],8,3,12,7,16,13,19,24]"""
+    val castingWidth = """["interpolate",["exponential",1.5],["zoom"],8,5,12,10,16,19,19,32]"""
+
+    if (!style.styleLayerExists(ALT_LINE) && alt != null) {
+      Value.fromJson(
+        """{"id":"$ALT_LINE","type":"line","source":"$ALT_SOURCE","layout":{"line-cap":"round","line-join":"round"},
+        "paint":{"line-color":"#9AA4B2","line-opacity":0.9,"line-width":$width}}"""
+      ).value?.let { style.addStyleLayer(it, position) }
+    }
+    if (!style.styleLayerExists(ROUTE_CASING)) {
+      Value.fromJson(
+        """{"id":"$ROUTE_CASING","type":"line","source":"$ROUTE_SOURCE","layout":{"line-cap":"round","line-join":"round"},
+        "paint":{"line-color":"#FFFFFF","line-opacity":0.95,"line-width":$castingWidth,"line-trim-offset":[0.0,$routeTrim]}}"""
+      ).value?.let { style.addStyleLayer(it, position) }
+    }
+    if (!style.styleLayerExists(ROUTE_LINE)) {
+      Value.fromJson(
+        """{"id":"$ROUTE_LINE","type":"line","source":"$ROUTE_SOURCE","layout":{"line-cap":"round","line-join":"round"},
+        "paint":{"line-width":$width,"line-trim-offset":[0.0,$routeTrim]}}"""
+      ).value?.let { style.addStyleLayer(it, position) }
+    }
+    routeGradient?.let { g ->
+      Value.fromJson(g).value?.let { style.setStyleLayerProperty(ROUTE_LINE, "line-gradient", it) }
+    }
+
+    // 3D models (the FS vehicle) are drawn in their own pass, so the lines would be painted over them.
+    // Same fix as the official SDK: let 3D objects occlude the route line.
+    listOf(ALT_LINE, ROUTE_CASING, ROUTE_LINE).forEach { id ->
+      if (style.styleLayerExists(id)) style.setStyleLayerProperty(id, "line-depth-occlusion-factor", Value(1.0))
+    }
+  }
+
+  /** The route goes under the road labels (and so under the puck, which is on top of everything). */
+  private fun belowLayerId(style: com.mapbox.maps.Style): String? =
+    listOf("road-label-navigation", "road-label").firstOrNull { style.styleLayerExists(it) }
 
   // =============================================================== prop setters
   fun setStyleUri(value: String?) {
@@ -277,14 +392,39 @@ class MapboxNavigationView(context: Context, appContext: AppContext) : ExpoView(
     applyStyle()
   }
 
-  fun setShowDestinationPin(value: Boolean) {
-    showDestinationPin = value
-    updateDestinationPin()
+  fun setTheme(value: String?) {
+    theme = value ?: "system"
+    refreshTheme()
+  }
+
+  fun setVehicle(value: String?) {
+    vehicle = value ?: "car"
+    applyPuck()
+  }
+
+  fun setVehicleScale(value: Double?) {
+    vehicleScale = (value ?: 8.0).coerceIn(1.0, 100.0)
+    applyPuck()
+  }
+
+  fun setVehicleRotation(value: Double?) {
+    vehicleRotation = value ?: 0.0
+    applyPuck()
   }
 
   fun setShowsUserLocation(value: Boolean) {
     showsUserLocation = value
     mapView.location.enabled = value
+  }
+
+  fun setShowDestinationPin(value: Boolean) {
+    showDestinationPin = value
+    updateDestinationPin()
+  }
+
+  fun setDestination(value: Point?) {
+    destination = value
+    updateDestinationPin()
   }
 
   fun setZoomEnabled(value: Boolean) { zoomEnabled = value; applyGestures() }
@@ -304,14 +444,69 @@ class MapboxNavigationView(context: Context, appContext: AppContext) : ExpoView(
     }
   }
 
-  // ----------------------------------------------------------- camera (<Camera/>, like @rnmapbox/maps)
+  // =============================================================== theme / style
+  private fun systemNight(): Boolean =
+    (context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
+      Configuration.UI_MODE_NIGHT_YES
+
+  private fun resolveNight(): Boolean = when (theme) {
+    "dark" -> true
+    "light" -> false
+    else -> systemNight()
+  }
+
+  private fun resolveStyleUri(night: Boolean): String {
+    explicitStyleUri?.let { return it }
+    return when (mapStyle) {
+      "streets" -> if (night) "mapbox://styles/mapbox/dark-v11" else "mapbox://styles/mapbox/streets-v12"
+      "outdoors" -> "mapbox://styles/mapbox/outdoors-v12"
+      "satellite" -> "mapbox://styles/mapbox/satellite-streets-v12"
+      else -> if (night) "mapbox://styles/mapbox/navigation-night-v1" else "mapbox://styles/mapbox/navigation-day-v1"
+    }
+  }
+
+  private fun applyStyle() {
+    val uri = resolveStyleUri(currentNight)
+    if (uri == loadedStyleUri) return
+    loadedStyleUri = uri
+    mapView.mapboxMap.loadStyle(uri) { applyRoute() }
+  }
+
+  private fun refreshTheme() {
+    val night = resolveNight()
+    if (night != currentNight) currentNight = night
+    applyStyle()
+  }
+
+  // =============================================================== vehicle puck (3D FS models)
+  private fun applyPuck() {
+    val scale = vehicleScale.toFloat()
+    val rotation = vehicleRotation.toFloat()
+    mapView.location.locationPuck = when (vehicle) {
+      "car" -> LocationPuck3D(
+        modelUri = "asset://models/fs_car.glb",
+        modelScale = listOf(scale, scale, scale),
+        modelRotation = listOf(0f, 0f, rotation),
+        modelScaleMode = ModelScaleMode.MAP,
+      )
+      "bike" -> LocationPuck3D(
+        modelUri = "asset://models/fs_bike.glb",
+        modelScale = listOf(scale, scale, scale),
+        modelRotation = listOf(0f, 0f, rotation),
+        modelScaleMode = ModelScaleMode.MAP,
+      )
+      else -> createDefault2DPuck(withBearing = true)
+    }
+  }
+
+  // =============================================================== camera (<Camera/>, like @rnmapbox/maps)
   data class CameraSpec(
-    val centerCoordinate: List<Double>?,   // [longitude, latitude]
+    val centerCoordinate: List<Double>?, // [longitude, latitude]
     val zoomLevel: Double?,
     val pitch: Double?,
     val heading: Double?,
-    val animationMode: String?,            // flyTo | easeTo | linearTo | moveTo | none
-    val animationDuration: Double?,        // ms
+    val animationMode: String?, // flyTo | easeTo | linearTo | moveTo | none
+    val animationDuration: Double?, // ms
     val minZoomLevel: Double?,
     val maxZoomLevel: Double?,
   )
@@ -338,8 +533,7 @@ class MapboxNavigationView(context: Context, appContext: AppContext) : ExpoView(
     spec.heading?.let { builder.bearing(it); hasTarget = true }
     if (!hasTarget) return
 
-    // an explicit camera request wins over the automatic navigation camera
-    navigationCamera.requestNavigationCameraToIdle()
+    emitMode("idle")
 
     val options = builder.build()
     val duration = (spec.animationDuration ?: 1000.0).toLong().coerceAtLeast(0L)
@@ -350,7 +544,13 @@ class MapboxNavigationView(context: Context, appContext: AppContext) : ExpoView(
     }
   }
 
-  // ----------------------------------------------------------- markers (<Marker/>)
+  private fun emitMode(mode: String) {
+    if (nativeMode == mode) return
+    nativeMode = mode
+    onCameraModeChanged(mapOf("mode" to mode))
+  }
+
+  // =============================================================== markers (<Marker/>)
   data class MarkerSpec(
     val id: String,
     val latitude: Double,
@@ -396,7 +596,6 @@ class MapboxNavigationView(context: Context, appContext: AppContext) : ExpoView(
     val manager = markerManager ?: return
     val wanted = markerSpecs.filter { markerBitmaps.containsKey(it.icon) }.associateBy { it.id }
 
-    // 1) remove markers that disappeared or whose icon/anchor changed
     val removedIds = markerAnnotations.keys.filter { id ->
       val spec = wanted[id]
       spec == null || markerSignatures[id] != signature(spec)
@@ -409,7 +608,6 @@ class MapboxNavigationView(context: Context, appContext: AppContext) : ExpoView(
       }
     }
 
-    // 2) move markers whose coordinate changed
     val moved = mutableListOf<PointAnnotation>()
     wanted.values.forEach { spec ->
       val annotation = markerAnnotations[spec.id] ?: return@forEach
@@ -421,7 +619,6 @@ class MapboxNavigationView(context: Context, appContext: AppContext) : ExpoView(
     }
     if (moved.isNotEmpty()) manager.update(moved)
 
-    // 3) create the new ones in a single batch
     val toCreate = wanted.values.filter { !markerAnnotations.containsKey(it.id) }
     if (toCreate.isNotEmpty()) {
       val options = toCreate.map { spec ->
@@ -441,459 +638,7 @@ class MapboxNavigationView(context: Context, appContext: AppContext) : ExpoView(
     }
   }
 
-  fun setVehicle(value: String?) {
-    vehicle = value ?: "car"
-    applyPuck()
-  }
-
-  fun setVehicleScale(value: Double?) {
-    vehicleScale = (value ?: 8.0).coerceIn(1.0, 100.0)
-    applyPuck()
-  }
-
-  fun setVehicleRotation(value: Double?) {
-    vehicleRotation = value ?: 0.0
-    applyPuck()
-  }
-
-  fun setTheme(value: String?) {
-    theme = value ?: "system"
-    refreshTheme()
-  }
-
-  fun setUnits(value: String?) {
-    units = value
-    distanceFormatterOptions = if (value == null) {
-      DistanceFormatterOptions.Builder(context).build()
-    } else {
-      DistanceFormatterOptions.Builder(context)
-        .unitType(if (value == "imperial") UnitType.IMPERIAL else UnitType.METRIC)
-        .build()
-    }
-    maneuverApi = MapboxManeuverApi(MapboxDistanceFormatter(distanceFormatterOptions))
-  }
-
-  fun setShowManeuverBanner(value: Boolean) {
-    showManeuverBanner = value
-    if (!value) maneuverView?.visibility = View.GONE
-  }
-
-  fun setShowSpeedLimit(value: Boolean) {
-    showSpeedLimit = value
-    if (!value) speedInfoView?.visibility = View.GONE
-  }
-
-  fun setTopInset(value: Double?) {
-    topInsetDp = value ?: 48.0
-    buildOverlays()
-  }
-
-  fun setSpeedLimitBottomMargin(value: Double?) {
-    speedLimitBottomMarginDp = value ?: 210.0
-    buildOverlays()
-  }
-
-  fun setOrigin(value: Point?) { origin = value }
-  fun setDestination(value: Point?) {
-    destination = value
-    updateDestinationPin()
-  }
-  fun setWaypoints(value: List<Point>?) { waypoints = value ?: emptyList() }
-
-  fun setProfile(value: String?) {
-    profile = when (value) {
-      "driving" -> DirectionsCriteria.PROFILE_DRIVING
-      "walking" -> DirectionsCriteria.PROFILE_WALKING
-      "cycling" -> DirectionsCriteria.PROFILE_CYCLING
-      else -> DirectionsCriteria.PROFILE_DRIVING_TRAFFIC
-    }
-  }
-
-  fun setLanguage(value: String?) {
-    val newLanguage = value?.takeIf { it.isNotBlank() } ?: Locale.getDefault().language.ifEmpty { "en" }
-    if (newLanguage == language) return
-    language = newLanguage
-    if (isSetUp) {
-      releaseVoice()
-      createVoice()
-    }
-  }
-
-  fun setSimulate(value: Boolean) { simulate = value }
-  fun setSimulationSpeed(value: Double?) { simulationSpeed = (value ?: 1.0).coerceIn(0.5, 8.0) }
-
-  fun setMuted(value: Boolean) {
-    muted = value
-    if (muted) voicePlayer?.clear()
-    voicePlayer?.volume(SpeechVolume(if (muted) 0f else 1f))
-  }
-
-  // =============================================================== lifecycle
-  override fun onAttachedToWindow() {
-    super.onAttachedToWindow()
-    if (!isSetUp && !isDestroyed) setUp()
-  }
-
-  private fun setUp() {
-    try {
-      val navigation = if (MapboxNavigationProvider.isCreated()) {
-        MapboxNavigationProvider.retrieve()
-      } else {
-        MapboxNavigationProvider.create(
-          NavigationOptions.Builder(context.applicationContext).build()
-        )
-      }
-      mapboxNavigation = navigation
-
-      navigation.registerLocationObserver(locationObserver)
-      navigation.registerRouteProgressObserver(routeProgressObserver)
-      navigation.registerRoutesObserver(routesObserver)
-      navigation.registerOffRouteObserver(offRouteObserver)
-      navigation.registerArrivalObserver(arrivalObserver)
-      navigation.registerVoiceInstructionsObserver(voiceInstructionsObserver)
-
-      createVoice()
-
-      // Free-drive session (real GPS, no foreground service) so the puck & camera work before navigation.
-      navigation.startTripSession(withForegroundService = false)
-      isSetUp = true
-      onReady(mapOf("ready" to true))
-    } catch (t: Throwable) {
-      emitError("SETUP_FAILED", t.message ?: "Failed to initialise Mapbox Navigation")
-    }
-  }
-
-  /** Called from the module when React Native drops the view. */
-  fun cleanup() {
-    if (isDestroyed) return
-    isDestroyed = true
-    try {
-      requestId.takeIf { it >= 0 }?.let { mapboxNavigation?.cancelRouteRequest(it) }
-      mapboxNavigation?.let { nav ->
-        nav.unregisterLocationObserver(locationObserver)
-        nav.unregisterRouteProgressObserver(routeProgressObserver)
-        nav.unregisterRoutesObserver(routesObserver)
-        nav.unregisterOffRouteObserver(offRouteObserver)
-        nav.unregisterArrivalObserver(arrivalObserver)
-        nav.unregisterVoiceInstructionsObserver(voiceInstructionsObserver)
-        nav.mapboxReplayer.stop()
-        nav.mapboxReplayer.clearEvents()
-        nav.setNavigationRoutes(emptyList())
-        nav.stopTripSession()
-      }
-      releaseVoice()
-      routeLineApi.cancel()
-      routeLineView.cancel()
-      maneuverApi.cancel()
-      mapView.camera.removeCameraAnimationsLifecycleListener(gesturesHandler)
-      if (MapboxNavigationProvider.isCreated()) MapboxNavigationProvider.destroy()
-      mapView.onDestroy()
-    } catch (_: Throwable) {
-      // best-effort cleanup
-    } finally {
-      mapboxNavigation = null
-      isSetUp = false
-    }
-  }
-
-  // =============================================================== commands (called from JS)
-  /** Requests routes with the current props and shows them as a preview. */
-  fun fetchRoute() {
-    val navigation = mapboxNavigation ?: return emitError("NOT_READY", "Navigation is not ready yet")
-    val dest = destination ?: return emitRouteError("NO_DESTINATION", "destination prop is required")
-    val start = origin
-      ?: lastLocation?.let { Point.fromLngLat(it.longitude, it.latitude) }
-      ?: return emitRouteError("NO_ORIGIN", "Waiting for a GPS fix – pass `origin` or try again in a moment")
-
-    val coordinates = mutableListOf(start).apply {
-      addAll(waypoints)
-      add(dest)
-    }
-
-    val routeOptions = RouteOptions.builder()
-      .applyDefaultNavigationOptions(profile)
-      .applyLanguageAndVoiceUnitOptions(context)
-      .language(language)
-      .apply {
-        units?.let { voiceUnits(if (it == "imperial") UnitType.IMPERIAL.value else UnitType.METRIC.value) }
-      }
-      .coordinatesList(coordinates)
-      .alternatives(true)
-      .build()
-
-    requestId.takeIf { it >= 0 }?.let { navigation.cancelRouteRequest(it) }
-    requestId = navigation.requestRoutes(
-      routeOptions,
-      object : NavigationRouterCallback {
-        override fun onRoutesReady(routes: List<NavigationRoute>, routerOrigin: String) {
-          if (isDestroyed) return
-          if (routes.isEmpty()) {
-            pendingStart = false
-            emitRouteError("NO_ROUTE", "No route found")
-            return
-          }
-          navigation.setNavigationRoutes(routes)
-          val primary = routes.first().directionsRoute
-          onRouteReady(
-            mapOf(
-              "distance" to (primary.distance() ?: 0.0),
-              "duration" to (primary.duration() ?: 0.0),
-              "routeCount" to routes.size,
-            )
-          )
-          navigationCamera.requestNavigationCameraToOverview()
-          if (pendingStart) {
-            pendingStart = false
-            beginNavigation(navigation, routes)
-          }
-        }
-
-        override fun onFailure(reasons: List<RouterFailure>, routeOptions: RouteOptions) {
-          pendingStart = false
-          emitRouteError(
-            "ROUTE_REQUEST_FAILED",
-            reasons.joinToString("; ") { it.message }.ifEmpty { "Route request failed" }
-          )
-        }
-
-        override fun onCanceled(routeOptions: RouteOptions, routerOrigin: String) {
-          pendingStart = false
-        }
-      }
-    )
-  }
-
-  /** Starts turn-by-turn navigation (fetches a route first if there is none). */
-  fun startNavigation() {
-    val navigation = mapboxNavigation ?: return emitError("NOT_READY", "Navigation is not ready yet")
-    if (isNavigating) return
-    if (currentRoutes.isEmpty()) {
-      pendingStart = true
-      fetchRoute()
-      return
-    }
-    beginNavigation(navigation)
-  }
-
-  fun stopNavigation() {
-    val navigation = mapboxNavigation ?: return
-    pendingStart = false
-    val wasNavigating = isNavigating
-    isNavigating = false
-    maneuverView?.visibility = View.GONE
-    voicePlayer?.clear()
-    speechApi?.cancel()
-    navigation.mapboxReplayer.stop()
-    navigation.mapboxReplayer.clearEvents()
-    navigation.setNavigationRoutes(emptyList())
-    navigation.stopTripSession()
-    navigation.startTripSession(withForegroundService = false)
-    lastBannerPrimary = null
-    lastBannerSecondary = null
-    lastManeuverType = null
-    lastManeuverModifier = null
-    recenter()
-    if (wasNavigating) onNavigationStopped(mapOf("reason" to "stopped"))
-  }
-
-  fun recenter() {
-    if (isNavigating) {
-      navigationCamera.requestNavigationCameraToFollowing()
-      return
-    }
-    val location = lastLocation ?: return
-    navigationCamera.requestNavigationCameraToIdle()
-    mapView.camera.flyTo(
-      CameraOptions.Builder()
-        .center(Point.fromLngLat(location.longitude, location.latitude))
-        .zoom(15.0)
-        .pitch(0.0)
-        .bearing(0.0)
-        .build(),
-      mapAnimationOptions { duration(900L) }
-    )
-  }
-
-  fun showOverview() {
-    navigationCamera.requestNavigationCameraToOverview()
-  }
-
-  // =============================================================== internals
-  private fun beginNavigation(
-    navigation: MapboxNavigation,
-    routes: List<NavigationRoute> = currentRoutes,
-  ) {
-    val primaryRoute = routes.firstOrNull()
-    if (primaryRoute == null) {
-      emitRouteError("NO_ROUTE", "No route available to start navigation")
-      return
-    }
-    isNavigating = true
-    navigation.stopTripSession()
-    if (simulate) {
-      navigation.startReplayTripSession(withForegroundService = false)
-      val replayer = navigation.mapboxReplayer
-      val events = ReplayRouteMapper().mapDirectionsRouteGeometry(primaryRoute.directionsRoute)
-      replayer.stop()
-      replayer.clearEvents()
-      replayer.pushEvents(events)
-      replayer.seekTo(events.first())
-      replayer.playbackSpeed(simulationSpeed)
-      replayer.play()
-    } else {
-      navigation.startTripSession(withForegroundService = true)
-    }
-    if (showManeuverBanner) maneuverView?.visibility = View.VISIBLE
-    navigationCamera.requestNavigationCameraToFollowing()
-    onNavigationStarted(mapOf("simulated" to simulate))
-  }
-
-  // ----------------------------------------------------------- theme / style
-  private fun systemNight(): Boolean =
-    (context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
-      Configuration.UI_MODE_NIGHT_YES
-
-  private fun resolveNight(): Boolean = when (theme) {
-    "dark" -> true
-    "light" -> false
-    else -> systemNight()
-  }
-
-  private fun resolveStyleUri(night: Boolean): String {
-    explicitStyleUri?.let { return it }
-    return when (mapStyle) {
-      "streets" ->
-        if (night) "mapbox://styles/mapbox/dark-v11" else "mapbox://styles/mapbox/streets-v12"
-      "outdoors" -> "mapbox://styles/mapbox/outdoors-v12"
-      "satellite" -> "mapbox://styles/mapbox/satellite-streets-v12"
-      else ->
-        if (night) NavigationStyles.NAVIGATION_NIGHT_STYLE else NavigationStyles.NAVIGATION_DAY_STYLE
-    }
-  }
-
-  private fun applyStyle() {
-    val uri = resolveStyleUri(currentNight)
-    if (uri == loadedStyleUri) return
-    loadedStyleUri = uri
-    routeLineView.cancel()
-    routeLineView = createRouteLineView(routeLineBelowLayer())
-    mapView.mapboxMap.loadStyle(uri) {
-      renderRoutes()
-      // the puck layers are added right after the style: render again so the route sits BELOW them
-      mapView.postDelayed({ renderRoutes() }, 400)
-    }
-  }
-
-  private fun refreshTheme() {
-    val night = resolveNight()
-    if (night != currentNight) {
-      currentNight = night
-      buildOverlays()
-    }
-    applyStyle()
-  }
-
-  override fun onConfigurationChanged(newConfig: Configuration?) {
-    super.onConfigurationChanged(newConfig)
-    refreshTheme()
-  }
-
-  /** Route line must be drawn under the location puck so the FS vehicle (and its logo) stays visible. */
-  private fun routeLineBelowLayer(): String =
-    if (vehicle == "car" || vehicle == "bike") {
-      LocationComponentConstants.MODEL_LAYER
-    } else {
-      LocationComponentConstants.LOCATION_INDICATOR_LAYER
-    }
-
-  private fun createRouteLineView(belowLayerId: String): MapboxRouteLineView =
-    MapboxRouteLineView(
-      MapboxRouteLineViewOptions.Builder(context)
-        .routeLineBelowLayerId(belowLayerId)
-        .build()
-    )
-
-  private fun dp(value: Double): Int = (value * density).toInt()
-
-  /** Context whose resources follow the resolved day/night mode + a Material theme (needed by Mapbox views). */
-  private fun themedContext(night: Boolean): Context {
-    val config = Configuration(context.resources.configuration)
-    config.uiMode = (config.uiMode and Configuration.UI_MODE_NIGHT_MASK.inv()) or
-      (if (night) Configuration.UI_MODE_NIGHT_YES else Configuration.UI_MODE_NIGHT_NO)
-    return ContextThemeWrapper(
-      context.createConfigurationContext(config),
-      com.google.android.material.R.style.Theme_MaterialComponents_DayNight_NoActionBar
-    )
-  }
-
-  /** (Re)creates Mapbox's official maneuver banner + speed-limit sign. */
-  private fun buildOverlays() {
-    maneuverView?.let { container.removeView(it) }
-    speedInfoView?.let { container.removeView(it) }
-    val themed = themedContext(currentNight)
-
-    val maneuver = MapboxManeuverView(themed)
-    maneuver.visibility = if (isNavigating && showManeuverBanner) View.VISIBLE else View.GONE
-    container.addView(
-      maneuver,
-      FrameLayout.LayoutParams(
-        ViewGroup.LayoutParams.MATCH_PARENT,
-        ViewGroup.LayoutParams.WRAP_CONTENT,
-        Gravity.TOP
-      ).apply { setMargins(dp(8.0), dp(topInsetDp), dp(8.0), 0) }
-    )
-    maneuverView = maneuver
-
-    val speed = MapboxSpeedInfoView(themed)
-    speed.applyOptions(MapboxSpeedInfoOptions.Builder().build())
-    speed.visibility = View.GONE
-    container.addView(
-      speed,
-      FrameLayout.LayoutParams(
-        ViewGroup.LayoutParams.WRAP_CONTENT,
-        ViewGroup.LayoutParams.WRAP_CONTENT,
-        Gravity.BOTTOM or Gravity.START
-      ).apply { setMargins(dp(12.0), 0, 0, dp(speedLimitBottomMarginDp)) }
-    )
-    speedInfoView = speed
-    lastSpeedInfo?.let {
-      speed.render(it)
-      if (showSpeedLimit) speed.visibility = View.VISIBLE
-    }
-  }
-
-  // ----------------------------------------------------------- vehicle puck (3D FS models)
-  private fun applyPuck() {
-    val scale = vehicleScale.toFloat()
-    val rotation = vehicleRotation.toFloat()
-    mapView.location.locationPuck = when (vehicle) {
-      "car" -> LocationPuck3D(
-        modelUri = "asset://models/fs_car.glb",
-        modelScale = listOf(scale, scale, scale),
-        modelRotation = listOf(0f, 0f, rotation),
-        modelScaleMode = ModelScaleMode.MAP,
-      )
-      "bike" -> LocationPuck3D(
-        modelUri = "asset://models/fs_bike.glb",
-        modelScale = listOf(scale, scale, scale),
-        modelRotation = listOf(0f, 0f, rotation),
-        modelScaleMode = ModelScaleMode.MAP,
-      )
-      else -> LocationPuck2D(
-        bearingImage = ImageHolder.from(
-          com.mapbox.navigation.ui.maps.R.drawable.mapbox_navigation_puck_icon
-        )
-      )
-    }
-    // keep the route under the (possibly different) puck layer
-    if (loadedStyleUri != null) {
-      routeLineView.cancel()
-      routeLineView = createRouteLineView(routeLineBelowLayer())
-      mapView.postDelayed({ renderRoutes() }, 400)
-    }
-  }
-
-  // ----------------------------------------------------------- marker presses
+  // ---------------------------------------------------------------- marker presses
   private fun emitMarkerPress(id: String) {
     val now = SystemClock.uptimeMillis()
     if (id == lastEmittedMarkerId && now - lastEmittedMarkerAt < 400) return
@@ -928,7 +673,7 @@ class MapboxNavigationView(context: Context, appContext: AppContext) : ExpoView(
     return bestId
   }
 
-  // ----------------------------------------------------------- map taps (places / POIs)
+  // ---------------------------------------------------------------- map taps (places / POIs)
   private fun stringProp(feature: Feature, key: String): String? =
     runCatching { if (feature.hasProperty(key)) feature.getStringProperty(key) else null }
       .getOrNull()
@@ -972,10 +717,10 @@ class MapboxNavigationView(context: Context, appContext: AppContext) : ExpoView(
     }
   }
 
-  // ----------------------------------------------------------- destination pin
+  // ---------------------------------------------------------------- destination pin
   private fun createPinBitmap(): Bitmap {
-    val w = dp(34.0)
-    val h = dp(46.0)
+    val w = (34.0 * density).toInt()
+    val h = (46.0 * density).toInt()
     val bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap)
     val paint = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -998,7 +743,7 @@ class MapboxNavigationView(context: Context, appContext: AppContext) : ExpoView(
     val manager = pointAnnotationManager ?: return
     manager.deleteAll()
     val point = destination ?: return
-    if (!showDestinationPin || currentRoutes.isNotEmpty()) return
+    if (!showDestinationPin || routeGeoJson != null) return
     val icon = pinBitmap ?: createPinBitmap().also { pinBitmap = it }
     manager.create(
       PointAnnotationOptions()
@@ -1008,192 +753,13 @@ class MapboxNavigationView(context: Context, appContext: AppContext) : ExpoView(
     )
   }
 
-  private fun renderRoutes() {
-    if (currentRoutes.isEmpty()) return
-    routeLineApi.setNavigationRoutes(currentRoutes) { value ->
-      mapView.mapboxMap.style?.let { routeLineView.renderRouteDrawData(it, value) }
-    }
-  }
-
-  private fun createVoice() {
-    speechApi = MapboxSpeechApi(context, language)
-    voicePlayer = MapboxVoiceInstructionsPlayer(context, language).also {
-      it.volume(SpeechVolume(if (muted) 0f else 1f))
-    }
-  }
-
-  private fun releaseVoice() {
-    speechApi?.cancel()
-    voicePlayer?.shutdown()
-    speechApi = null
-    voicePlayer = null
-  }
-
-  private fun cameraModeName(state: NavigationCameraState): String = when (state) {
-    NavigationCameraState.FOLLOWING, NavigationCameraState.TRANSITION_TO_FOLLOWING -> "following"
-    NavigationCameraState.OVERVIEW, NavigationCameraState.TRANSITION_TO_OVERVIEW -> "overview"
-    else -> "idle"
-  }
-
-  private fun emitError(code: String, message: String) {
-    onError(mapOf("code" to code, "message" to message))
-  }
-
-  private fun emitRouteError(code: String, message: String) {
-    onRouteError(mapOf("code" to code, "message" to message))
-  }
-
-  // =============================================================== observers
-  private val locationObserver = object : LocationObserver {
-    override fun onNewRawLocation(rawLocation: Location) {}
-
-    override fun onNewLocationMatcherResult(locationMatcherResult: LocationMatcherResult) {
-      val location = locationMatcherResult.enhancedLocation
-      lastLocation = location
-      navigationLocationProvider.changePosition(
-        location = location,
-        keyPoints = locationMatcherResult.keyPoints,
-      )
-      viewportDataSource.onLocationChanged(location)
-      viewportDataSource.evaluate()
-
-      if (!firstLocationReceived) {
-        firstLocationReceived = true
-        if (!cameraControlledByJs) mapView.mapboxMap.setCamera(
-          CameraOptions.Builder()
-            .center(Point.fromLngLat(location.longitude, location.latitude))
-            .zoom(15.0)
-            .pitch(0.0)
-            .bearing(0.0)
-            .build()
-        )
-      }
-
-      speedInfoApi.updatePostedAndCurrentSpeed(locationMatcherResult, distanceFormatterOptions)
-        ?.let { value ->
-          lastSpeedInfo = value
-          speedInfoView?.let { view ->
-            view.render(value)
-            view.visibility = if (showSpeedLimit) View.VISIBLE else View.GONE
-          }
-        }
-
-      val payload = mutableMapOf<String, Any>(
-        "latitude" to location.latitude,
-        "longitude" to location.longitude,
-      )
-      location.speed?.let { payload["speed"] = it.toDouble() }
-      location.bearing?.let { payload["bearing"] = it.toDouble() }
-      onLocation(payload)
-    }
-  }
-
-  private val routesObserver = object : RoutesObserver {
-    override fun onRoutesChanged(result: RoutesUpdatedResult) {
-      currentRoutes = result.navigationRoutes
-      updateDestinationPin()
-      if (currentRoutes.isNotEmpty()) {
-        routeLineApi.setNavigationRoutes(currentRoutes) { value ->
-          mapView.mapboxMap.style?.let { routeLineView.renderRouteDrawData(it, value) }
-        }
-        viewportDataSource.onRouteChanged(currentRoutes.first())
-        viewportDataSource.evaluate()
-      } else {
-        routeLineApi.clearRouteLine { value ->
-          mapView.mapboxMap.style?.let { routeLineView.renderClearRouteLineValue(it, value) }
-        }
-        viewportDataSource.clearRouteData()
-        viewportDataSource.evaluate()
-      }
-    }
-  }
-
-  private val routeProgressObserver = RouteProgressObserver { routeProgress: RouteProgress ->
-    viewportDataSource.onRouteProgressChanged(routeProgress)
-    viewportDataSource.evaluate()
-
-    routeLineApi.updateWithRouteProgress(routeProgress) { result ->
-      mapView.mapboxMap.style?.let { routeLineView.renderRouteLineUpdate(it, result) }
-    }
-
-    if (isNavigating && showManeuverBanner) {
-      maneuverView?.let { view ->
-        view.visibility = View.VISIBLE
-        view.renderManeuvers(maneuverApi.getManeuvers(routeProgress))
-      }
-    }
-
-    routeProgress.bannerInstructions?.let { banner ->
-      lastBannerPrimary = banner.primary().text()
-      lastBannerSecondary = banner.secondary()?.text()
-      lastManeuverType = banner.primary().type()
-      lastManeuverModifier = banner.primary().modifier()
-    }
-
-    val payload = mutableMapOf<String, Any>(
-      "distanceRemaining" to routeProgress.distanceRemaining.toDouble(),
-      "durationRemaining" to routeProgress.durationRemaining,
-      "fractionTraveled" to routeProgress.fractionTraveled.toDouble(),
-      "stepDistanceRemaining" to (
-        routeProgress.currentLegProgress?.currentStepProgress?.distanceRemaining?.toDouble() ?: 0.0
-        ),
-    )
-    routeProgress.currentLegProgress?.currentStepProgress?.step?.name()
-      ?.takeIf { it.isNotBlank() }
-      ?.let { payload["roadName"] = it }
-    lastSpeedInfo?.let { info ->
-      info.postedSpeed?.let { payload["speedLimit"] = it.toDouble() }
-      payload["speedUnit"] = if (info.postedSpeedUnit == SpeedUnit.MILES_PER_HOUR) "mph" else "km/h"
-      payload["currentSpeed"] = info.currentSpeed.toDouble()
-    }
-    lastBannerPrimary?.let { payload["instruction"] = it }
-    lastBannerSecondary?.let { payload["secondaryInstruction"] = it }
-    lastManeuverType?.let { payload["maneuverType"] = it }
-    lastManeuverModifier?.let { payload["maneuverModifier"] = it }
-    onProgress(payload)
-  }
-
-  private val offRouteObserver = object : OffRouteObserver {
-    override fun onOffRouteStateChanged(offRoute: Boolean) {
-      onOffRoute(mapOf("offRoute" to offRoute))
-    }
-  }
-
-  private val arrivalObserver = object : ArrivalObserver {
-    override fun onWaypointArrival(routeProgress: RouteProgress) {
-      onArrival(mapOf("final" to false))
-    }
-
-    override fun onNextRouteLegStart(routeLegProgress: RouteLegProgress) {}
-
-    override fun onFinalDestinationArrival(routeProgress: RouteProgress) {
-      onArrival(mapOf("final" to true))
-    }
-  }
-
-  // ----------------------------------------------------------- voice guidance
-  private val voicePlayerCallback = MapboxNavigationConsumer<SpeechAnnouncement> { announcement ->
-    speechApi?.clean(announcement)
-  }
-
-  private val speechCallback =
-    MapboxNavigationConsumer<Expected<SpeechError, SpeechValue>> { expected ->
-      expected.fold(
-        { error -> voicePlayer?.play(error.fallback, voicePlayerCallback) },
-        { value -> voicePlayer?.play(value.announcement, voicePlayerCallback) },
-      )
-    }
-
-  private val voiceInstructionsObserver = VoiceInstructionsObserver { voiceInstructions ->
-    if (!muted) speechApi?.generate(voiceInstructions, speechCallback)
-  }
-
   companion object {
-    private val POI_SOURCE_LAYERS = setOf(
-      "poi_label",
-      "transit_stop_label",
-      "airport_label",
-      "natural_label",
-    )
+    private const val CAMERA_OWNER = "FS_NAV_CAMERA"
+    private const val ROUTE_SOURCE = "fs-route-src"
+    private const val ALT_SOURCE = "fs-alt-src"
+    private const val ROUTE_LINE = "fs-route-line"
+    private const val ROUTE_CASING = "fs-route-casing"
+    private const val ALT_LINE = "fs-alt-line"
+    private val POI_SOURCE_LAYERS = setOf("poi_label", "transit_stop_label", "airport_label", "natural_label")
   }
 }

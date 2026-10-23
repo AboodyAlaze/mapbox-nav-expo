@@ -20,9 +20,6 @@ const META_KEY = 'com.mapbox.navigation.expo.ACCESS_TOKEN';
 const REQUIRED_PERMISSIONS = [
   'android.permission.ACCESS_FINE_LOCATION',
   'android.permission.ACCESS_COARSE_LOCATION',
-  'android.permission.FOREGROUND_SERVICE',
-  'android.permission.FOREGROUND_SERVICE_LOCATION',
-  'android.permission.POST_NOTIFICATIONS',
   'android.permission.INTERNET',
 ];
 
@@ -160,7 +157,7 @@ function withMapboxNavigation(config, props = {}) {
   // iOS: Mapbox reads the public token from Info.plist (MBXAccessToken)
   config = withInfoPlist(config, (cfg) => {
     if (token) cfg.modResults.MBXAccessToken = token;
-    // Mapbox's RouteVoiceController asserts that "audio" is listed in UIBackgroundModes (spoken instructions).
+    // "audio" lets spoken instructions keep playing when the app goes to the background.
     // Optional plugin prop `backgroundLocation: true` also adds "location" (navigation keeps running with the screen locked).
     const modes = new Set(Array.isArray(cfg.modResults.UIBackgroundModes) ? cfg.modResults.UIBackgroundModes : []);
     modes.add('audio');

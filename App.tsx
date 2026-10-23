@@ -4,8 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
-  PermissionsAndroid,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -149,9 +147,6 @@ function Main() {
   useEffect(() => {
     (async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
-      if (Platform.OS === 'android' && Platform.Version >= 33) {
-        await PermissionsAndroid.request('android.permission.POST_NOTIFICATIONS' as any);
-      }
       setPermissionState(status === 'granted' ? 'granted' : 'denied');
     })();
   }, []);
@@ -276,8 +271,6 @@ function Main() {
         vehicle={vehicle}
         vehicleScale={vehicleScale}
         vehicleRotation={vehicleRotation}
-        showManeuverBanner={false}
-        showSpeedLimit={false}
         onReady={() => setReady(true)}
         onLocation={(e) => {
           lastLocation.current = { latitude: e.latitude, longitude: e.longitude };
