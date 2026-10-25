@@ -10,6 +10,7 @@ import UIKit
 final class MapboxNavigationView: ExpoView {
   // ---------------------------------------------------------------- events
   let onReady = EventDispatcher()
+  let onMapLoaded = EventDispatcher()
   let onCameraModeChanged = EventDispatcher()
   let onError = EventDispatcher()
   let onMapPress = EventDispatcher()
@@ -32,10 +33,18 @@ final class MapboxNavigationView: ExpoView {
   private var destination: CLLocationCoordinate2D?
 
   // ---------------------------------------------------------------- state
-  private var mapView: MapView!
-  private let locationSubject = PassthroughSubject<[Location], Never>()
-  private var cancelables = Set<AnyCancelable>()
-  private var loadedStyleUri: String?
+  // The native map lives in a MapBundle: created when this view gets a window, or RECEIVED (already loaded) when another
+  // view with the same `sharedKey` already has one. Before that, `bundle` is nil and the props are only remembered.
+  private var bundle: MapBundle?
+  private var sharedKey: String?
+  private lazy var privateKey = "private:\(ObjectIdentifier(self).hashValue)"
+  private var mapView: MapView! { bundle?.mapView }
+  private var loadedStyleUri: String? {
+    get { bundle?.loadedStyleUri }
+    set { bundle?.loadedStyleUri = newValue }
+  }
+  private var cameraSpec: CameraRecord?
+  private var pendingImages: [String: String] = [:]
   private var currentNight = false
   private var nativeMode = "idle"
   private var cameraControlledByJs = false
@@ -47,12 +56,21 @@ final class MapboxNavigationView: ExpoView {
   private var routeTrim: Double = 0
 
   // markers
-  private var markerManager: PointAnnotationManager?
-  private var pinManager: PointAnnotationManager?
+  private var markerManager: PointAnnotationManager? { bundle?.markerManager }
+  private var pinManager: PointAnnotationManager? { bundle?.pinManager }
   private var markerSpecs: [MarkerRecord] = []
-  private var markerImages: [String: UIImage] = [:]
-  private var markerAnnotations: [String: PointAnnotation] = [:]
-  private var markerSignatures: [String: String] = [:]
+  private var markerImages: [String: UIImage] {
+    get { bundle?.markerImages ?? [:] }
+    set { bundle?.markerImages = newValue }
+  }
+  private var markerAnnotations: [String: PointAnnotation] {
+    get { bundle?.markerAnnotations ?? [:] }
+    set { bundle?.markerAnnotations = newValue }
+  }
+  private var markerSignatures: [String: String] {
+    get { bundle?.markerSignatures ?? [:] }
+    set { bundle?.markerSignatures = newValue }
+  }
   private var pinImage: UIImage?
 
   private static let routeSource = "fs-route-src"
@@ -68,37 +86,68 @@ final class MapboxNavigationView: ExpoView {
     clipsToBounds = true
     backgroundColor = UIColor(white: 0.93, alpha: 1)
     MapboxTokenHelper.applyIfNeeded()
-
     currentNight = resolveNight()
-    let uri = resolveStyleUri(night: currentNight)
-    loadedStyleUri = uri
+  }
 
-    // the puck follows the positions we push from JS (snapped to the route while navigating)
-    let model = LocationDataModel(location: locationSubject.eraseToAnyPublisher(), heading: nil)
-    let initOptions = MapInitOptions(styleURI: StyleURI(rawValue: uri), locationDataModel: model)
-    let map = MapView(frame: bounds, mapInitOptions: initOptions)
-    map.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-    addSubview(map)
-    mapView = map
+  /// The map is created (or received, when it is shared) only now: every prop, `sharedKey` included, is already here.
+  /// Only the FIRST window takes it: later ones (a covered screen shown again) never steal a map that moved on.
+  override func didMoveToWindow() {
+    super.didMoveToWindow()
+    guard window != nil, bundle == nil else { return }
+    let b = SharedMaps.acquire(key: sharedKey ?? privateKey, styleUri: resolveStyleUri(night: currentNight))
+    bundle = b
+    b.attach(self)
+  }
 
-    map.mapboxMap.onStyleLoaded.observe { [weak self] _ in
-      self?.applyRoute()
-    }.store(in: &cancelables)
+  /// Removed from React (not just covered by another screen): the map goes back to the previous host.
+  override func willMove(toSuperview newSuperview: UIView?) {
+    super.willMove(toSuperview: newSuperview)
+    if newSuperview == nil, let b = bundle {
+      bundle = nil
+      b.release(self)
+    }
+  }
 
+  /// Views with the same key share ONE native map (shared element: nothing is created again).
+  func setSharedKey(_ value: String?) {
+    sharedKey = (value?.isEmpty ?? true) ? nil : value
+  }
+
+  // MARK: - called by the MapBundle
+
+  /// This view just received the map: push every prop of THIS view into it.
+  func onMapAdopted() {
+    currentNight = resolveNight()
+    decodePendingImages()
+    applyStyle()
     applyPuck()
     applyGestures()
     installGestureRecognizers()
-
-    markerManager = map.annotations.makePointAnnotationManager()
-    pinManager = map.annotations.makePointAnnotationManager()
+    // the tap handlers of the pins point at the view that created them: build them again for this view
+    markerAnnotations = [:]
+    markerSignatures = [:]
+    markerManager?.annotations = []
+    updateDestinationPin()
     syncMarkers()
-
+    applyRoute()
+    if let spec = cameraSpec { applyCamera(spec) }
     onReady(["ready": true])
+    if bundle?.mapLoaded == true { emitMapLoaded() }
+  }
+
+  /// The map finished loading (style + tiles): lets JS swap a placeholder picture for the live map.
+  func emitMapLoaded() {
+    onMapLoaded(["loaded": true])
+  }
+
+  func onMapTakenAway() {
+    nativeMode = "idle"
+    removeGestureRecognizers()
   }
 
   override func layoutSubviews() {
     super.layoutSubviews()
-    mapView?.frame = bounds
+    if let mapView, mapView.superview === self { mapView.frame = bounds }
   }
 
   override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
@@ -107,6 +156,29 @@ final class MapboxNavigationView: ExpoView {
   }
 
   // MARK: - commands from JS
+
+  /// A picture of the map as it is drawn right now (markers included), saved in the temp folder. Done by the Maps SDK
+  /// itself: a GPU surface cannot be photographed with the normal view tools. Resolves with a `file://` uri.
+  func takeSnapshot(_ promise: Promise) {
+    guard bundle != nil, let mapView else {
+      promise.reject("NO_MAP", "The map is not ready yet")
+      return
+    }
+    do {
+      let image = try mapView.snapshot()
+      // JPEG: a map picture is opaque and a PNG of it is several times bigger, so it loads and decodes much slower
+      guard let data = image.jpegData(compressionQuality: 0.88) else {
+        promise.reject("SNAPSHOT_FAILED", "Could not encode the picture")
+        return
+      }
+      let name = "mapbox-nav-snapshot-\(Int(Date().timeIntervalSince1970 * 1000)).jpg"
+      let url = FileManager.default.temporaryDirectory.appendingPathComponent(name)
+      try data.write(to: url)
+      promise.resolve(url.absoluteString)
+    } catch {
+      promise.reject("SNAPSHOT_FAILED", error.localizedDescription)
+    }
+  }
 
   func updateLocation(lat: Double, lng: Double, bearing: Double, accuracy: Double) {
     let clLocation = CLLocation(
@@ -118,10 +190,11 @@ final class MapboxNavigationView: ExpoView {
       speed: -1,
       timestamp: Date()
     )
-    locationSubject.send([Location(clLocation: clLocation)])
+    bundle?.locationSubject.send([Location(clLocation: clLocation)])
   }
 
   func followCamera(lat: Double, lng: Double, bearing: Double, zoom: Double, pitch: Double, durationMs: Double) {
+    guard bundle != nil else { return }
     nativeMode = "following"
     let padTop = pitch > 0 ? bounds.height * 0.34 : 0
     mapView.camera.ease(
@@ -140,7 +213,7 @@ final class MapboxNavigationView: ExpoView {
     let coordinates = points.compactMap { p -> CLLocationCoordinate2D? in
       p.count >= 2 ? CLLocationCoordinate2D(latitude: p[1], longitude: p[0]) : nil
     }
-    guard coordinates.count >= 2 else { return }
+    guard bundle != nil, coordinates.count >= 2 else { return }
     nativeMode = "overview"
     do {
       let camera = try mapView.mapboxMap.camera(
@@ -173,6 +246,7 @@ final class MapboxNavigationView: ExpoView {
 
   func setRouteProgress(_ fraction: Double) {
     routeTrim = min(1, max(0, fraction))
+    guard bundle != nil else { return }
     let map: MapboxMap = mapView.mapboxMap
     guard map.isStyleLoaded else { return }
     for id in [Self.routeLine, Self.routeCasing] where map.layerExists(withId: id) {
@@ -190,6 +264,7 @@ final class MapboxNavigationView: ExpoView {
   }
 
   private func removeRouteLayers() {
+    guard bundle != nil else { return }
     let map: MapboxMap = mapView.mapboxMap
     guard map.isStyleLoaded else { return }
     for id in [Self.routeLine, Self.routeCasing, Self.altLine] where map.layerExists(withId: id) {
@@ -205,7 +280,8 @@ final class MapboxNavigationView: ExpoView {
   }
 
   /// Idempotent: (re)creates sources and layers from the last route data. Called again after a style change.
-  private func applyRoute() {
+  func applyRoute() {
+    guard bundle != nil else { return }
     let map: MapboxMap = mapView.mapboxMap
     guard map.isStyleLoaded else { return }
     guard let geo = routeGeoJson, let geoObject = jsonObject(geo) else {
@@ -289,7 +365,9 @@ final class MapboxNavigationView: ExpoView {
 
   func applyCamera(_ spec: CameraRecord?) {
     guard let spec else { return }
+    cameraSpec = spec // re-applied whenever this view receives the (shared) map
     cameraControlledByJs = true
+    guard bundle != nil else { return }
 
     if spec.minZoomLevel != nil || spec.maxZoomLevel != nil {
       try? mapView.mapboxMap.setCameraBounds(
@@ -531,6 +609,13 @@ final class MapboxNavigationView: ExpoView {
     mapView.addGestureRecognizer(rotation)
   }
 
+  private func removeGestureRecognizers() {
+    guard let mapView else { return }
+    for recognizer in mapView.gestureRecognizers ?? [] where (recognizer.name ?? "").hasPrefix("fs.") {
+      mapView.removeGestureRecognizer(recognizer)
+    }
+  }
+
   @objc private func handleUserMove(_ recognizer: UIGestureRecognizer) {
     if recognizer.state == .began { emitMode("idle") }
   }
@@ -558,21 +643,22 @@ final class MapboxNavigationView: ExpoView {
 
   /// icon key -> base64 PNG (captured from the SVG children in JS, once per key)
   func setMarkerImages(_ value: [String: String]) {
-    var images: [String: UIImage] = [:]
-    for (key, base64) in value {
-      if let existing = markerImages[key] {
-        images[key] = existing
-        continue
-      }
-      if !base64.isEmpty,
-         let data = Data(base64Encoded: base64, options: .ignoreUnknownCharacters),
+    pendingImages = value
+    guard bundle != nil else { return }
+    decodePendingImages()
+    syncMarkers()
+  }
+
+  /// The decoded pictures are shared by every view that uses the same map: a second view never decodes them again.
+  private func decodePendingImages() {
+    guard let bundle else { return }
+    for (key, base64) in pendingImages where bundle.markerImages[key] == nil && !base64.isEmpty {
+      if let data = Data(base64Encoded: base64, options: .ignoreUnknownCharacters),
          let image = UIImage(data: data, scale: UIScreen.main.scale)
       {
-        images[key] = image
+        bundle.markerImages[key] = image
       }
     }
-    markerImages = images
-    syncMarkers()
   }
 
   private func iconAnchor(x: Double, y: Double) -> IconAnchor {

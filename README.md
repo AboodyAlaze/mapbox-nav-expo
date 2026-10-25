@@ -14,6 +14,8 @@ MAPBOX_ACCESS_TOKEN=pk.xxxxx npx expo prebuild --clean    # public token, never 
 npx expo run:ios --device     # or: npx expo run:android --device
 ```
 
+> **v2.3:** maps take their own picture (`takeSnapshot`, `FrozenMap`, `MapWithCover`) — never black, no image files; works with the `cardExpand` transition of `expo-delivery-transitions`. See the module README.
+
 > Development build only (no Expo Go). Maps SDK: Android 11.33.0, iOS 11.26.0.
 
 ---

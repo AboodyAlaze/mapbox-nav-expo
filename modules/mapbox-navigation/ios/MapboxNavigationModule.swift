@@ -62,12 +62,16 @@ public class MapboxNavigationModule: Module {
     View(MapboxNavigationView.self) {
       Events(
         "onReady",
+        "onMapLoaded",
         "onCameraModeChanged",
         "onError",
         "onMapPress",
         "onMapLongPress",
         "onMarkerPress"
       )
+
+      // ---- views with the same key share ONE native map (shared element between screens)
+      Prop("sharedKey") { (view: MapboxNavigationView, value: String?) in view.setSharedKey(value) }
 
       // ---- look & feel
       Prop("styleURL") { (view: MapboxNavigationView, value: String?) in view.setStyleUri(value) }
@@ -117,6 +121,7 @@ public class MapboxNavigationModule: Module {
       AsyncFunction("setRouteProgress") { (view: MapboxNavigationView, fraction: Double) in
         view.setRouteProgress(fraction)
       }
+      AsyncFunction("takeSnapshot") { (view: MapboxNavigationView, promise: Promise) in view.takeSnapshot(promise) }
       AsyncFunction("clearRoute") { (view: MapboxNavigationView) in view.clearRoute() }
       AsyncFunction("setCamera") { (view: MapboxNavigationView, camera: CameraRecord) in view.applyCamera(camera) }
     }

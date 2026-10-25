@@ -2,6 +2,7 @@ package expo.modules.mapboxnavigation
 
 import com.mapbox.common.MapboxOptions
 import com.mapbox.geojson.Point
+import expo.modules.kotlin.Promise
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.kotlin.records.Field
@@ -91,12 +92,16 @@ class MapboxNavigationModule : Module() {
     View(MapboxNavigationView::class) {
       Events(
         "onReady",
+        "onMapLoaded",
         "onCameraModeChanged",
         "onError",
         "onMapPress",
         "onMapLongPress",
         "onMarkerPress"
       )
+
+      // ---- views with the same key share ONE native map (shared element between screens)
+      Prop("sharedKey") { view: MapboxNavigationView, value: String? -> view.setSharedKey(value) }
 
       // ---- look & feel
       Prop("styleURL") { view: MapboxNavigationView, value: String? -> view.setStyleUri(value) }
@@ -139,6 +144,7 @@ class MapboxNavigationModule : Module() {
       AsyncFunction("setRoute") { view: MapboxNavigationView, geoJson: String, gradient: String -> view.setRoute(geoJson, gradient) }
       AsyncFunction("setAlternatives") { view: MapboxNavigationView, geoJson: String -> view.setAlternatives(geoJson) }
       AsyncFunction("setRouteProgress") { view: MapboxNavigationView, fraction: Double -> view.setRouteProgress(fraction) }
+      AsyncFunction("takeSnapshot") { view: MapboxNavigationView, promise: Promise -> view.takeSnapshot(promise) }
       AsyncFunction("clearRoute") { view: MapboxNavigationView -> view.clearRoute() }
       AsyncFunction("setCamera") { view: MapboxNavigationView, camera: CameraRecord -> view.applyCamera(camera.toSpec()) }
 

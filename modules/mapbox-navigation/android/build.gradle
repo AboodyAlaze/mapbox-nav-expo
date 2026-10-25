@@ -4,7 +4,7 @@ plugins {
 }
 
 group = 'expo.modules.mapboxnavigation'
-version = '2.0.0'
+version = '2.5.0'
 
 // ---------------------------------------------------------------------------
 // Mapbox Maven repository (Maps SDK). Added on rootProject.allprojects so the transitive
@@ -38,7 +38,7 @@ android {
   namespace "expo.modules.mapboxnavigation"
   defaultConfig {
     versionCode 1
-    versionName "2.0.0"
+    versionName "2.5.0"
   }
   lintOptions {
     abortOnError false
@@ -46,6 +46,8 @@ android {
 }
 
 dependencies {
+  // The map gets a lifecycle of its own (see MapBundle.kt); the version is resolved to the one the app already uses.
+  implementation "androidx.lifecycle:lifecycle-runtime-ktx:2.8.7"
   // Only the MAP. Navigation (routing, banners, voice, rerouting) runs in TypeScript – no Navigation SDK.
   api "com.mapbox.maps:android:${mapboxMapsVersion}"
 }

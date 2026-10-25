@@ -1,6 +1,12 @@
 export { default as MapboxNavigationView } from './src/MapboxNavigationView';
 export { Marker } from './src/Marker';
 export { Camera } from './src/Camera';
+export { MapWithCover } from './src/MapWithCover';
+export { FrozenMap } from './src/FrozenMap';
+export type { FrozenMapProps } from './src/FrozenMap';
+export { useMapSnapshot, useMapSnapshotInfo, useMapSnapshotReady } from './src/useMapSnapshot';
+export { setMapSnapshot, getMapSnapshot, getMapSnapshotInfo, clearMapSnapshot, snapshotId, zoomToFillScreen, coverFitsLayout } from './src/snapshots';
+export type { MapWithCoverProps, MapWithCoverRef } from './src/MapWithCover';
 export { setAccessToken, hasAccessToken, getAccessToken, isNativeModuleAvailable } from './src/MapboxNavigationModule';
 export * from './src/MapboxNavigation.types';
 export * from './src/ui/NavigationUI';

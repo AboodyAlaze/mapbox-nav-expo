@@ -111,6 +111,7 @@ export default function MapboxNavigationView({
   speedLimitBottomMargin: _speedLimitBottomMargin,
   zoomControlEnabled: _zoomControlEnabled, // no-op (Mapbox has no zoom buttons)
   onReady,
+  onMapLoaded,
   onLocation,
   onRouteReady,
   onRouteError,
@@ -232,6 +233,11 @@ export default function MapboxNavigationView({
       stopNavigation: async () => controller.stopNavigation(),
       recenter: async () => controller.recenter(),
       showOverview: async () => controller.showOverview(),
+      takeSnapshot: async () => {
+        const uri = await nativeRef.current?.takeSnapshot();
+        if (!uri) throw new Error('The map is not ready yet');
+        return uri as string;
+      },
       setCamera: async (c: CameraProps) => {
         await nativeRef.current?.setCamera(c);
       },
@@ -305,6 +311,7 @@ export default function MapboxNavigationView({
         markerImages={images}
         onMarkerPress={(e: { nativeEvent: { id: string } }) => pressHandlers.current[e.nativeEvent.id]?.()}
         onReady={fireReady}
+        onMapLoaded={unwrap(onMapLoaded)}
         onCameraModeChanged={(e: { nativeEvent: { mode: 'following' | 'overview' | 'idle' } }) =>
           controller.onNativeCameraMode(e.nativeEvent.mode)
         }

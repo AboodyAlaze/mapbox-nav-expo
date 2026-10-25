@@ -7,6 +7,7 @@ import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
+import android.net.Uri
 import android.graphics.Paint
 import android.graphics.Path
 import android.os.SystemClock
@@ -21,6 +22,7 @@ import com.mapbox.maps.CameraBoundsOptions
 import com.mapbox.maps.CameraOptions
 import com.mapbox.maps.EdgeInsets
 import com.mapbox.maps.LayerPosition
+import com.mapbox.maps.MapInitOptions
 import com.mapbox.maps.MapView
 import com.mapbox.maps.RenderedQueryGeometry
 import com.mapbox.maps.RenderedQueryOptions
@@ -50,8 +52,11 @@ import com.mapbox.maps.plugin.locationcomponent.createDefault2DPuck
 import com.mapbox.maps.plugin.locationcomponent.location
 import com.mapbox.maps.plugin.scalebar.scalebar
 import expo.modules.kotlin.AppContext
+import expo.modules.kotlin.Promise
 import expo.modules.kotlin.viewevent.EventDispatcher
 import expo.modules.kotlin.views.ExpoView
+import java.io.File
+import java.io.FileOutputStream
 import java.util.concurrent.CopyOnWriteArraySet
 
 /**
@@ -63,6 +68,7 @@ class MapboxNavigationView(context: Context, appContext: AppContext) : ExpoView(
 
   // ---------------------------------------------------------------- events
   private val onReady by EventDispatcher<Map<String, Any>>()
+  private val onMapLoaded by EventDispatcher<Map<String, Any>>()
   private val onCameraModeChanged by EventDispatcher<Map<String, Any>>()
   private val onError by EventDispatcher<Map<String, Any>>()
   private val onMapPress by EventDispatcher<Map<String, Any>>()
@@ -86,10 +92,24 @@ class MapboxNavigationView(context: Context, appContext: AppContext) : ExpoView(
 
   // ---------------------------------------------------------------- state
   private val density = context.resources.displayMetrics.density
-  private val container = FrameLayout(context)
-  private val mapView: MapView
-  private val locationProvider = ExternalLocationProvider()
-  private var loadedStyleUri: String? = null
+  internal val container = FrameLayout(context)
+
+  // The native map lives in a MapBundle: created when this view is attached, or RECEIVED (already loaded) when another
+  // view with the same `sharedKey` already has one. Before that, `bundle` is null and the props are only remembered.
+  private var bundle: MapBundle? = null
+  private var sharedKey: String? = null
+  private var adoptScheduled = false
+  private var destroyedByReact = false
+  private val privateKey = "private:${System.identityHashCode(this)}"
+  private val mapView: MapView get() = bundle!!.mapView
+  private val locationProvider: ExternalLocationProvider get() = bundle!!.locationProvider
+  private var loadedStyleUri: String?
+    get() = bundle?.loadedStyleUri
+    set(value) {
+      bundle?.loadedStyleUri = value
+    }
+  private var cameraSpec: CameraSpec? = null
+  private var pendingImages: Map<String, String> = emptyMap()
   private var currentNight = false
   private var nativeMode = "idle"
   private var cameraControlledByJs = false
@@ -101,13 +121,13 @@ class MapboxNavigationView(context: Context, appContext: AppContext) : ExpoView(
   private var routeTrim = 0.0
 
   // markers
-  private var pointAnnotationManager: PointAnnotationManager? = null // destination pin
-  private var markerManager: PointAnnotationManager? = null // <Marker/>
+  private val pointAnnotationManager: PointAnnotationManager? get() = bundle?.pinManager // destination pin
+  private val markerManager: PointAnnotationManager? get() = bundle?.markerManager // <Marker/>
   private var markerSpecs: List<MarkerSpec> = emptyList()
-  private val markerBitmaps = mutableMapOf<String, Bitmap>()
-  private val markerAnnotations = mutableMapOf<String, PointAnnotation>()
-  private val markerSignatures = mutableMapOf<String, String>()
-  private val annotationToMarker = mutableMapOf<String, String>()
+  private val markerBitmaps: MutableMap<String, Bitmap> get() = bundle!!.markerBitmaps
+  private val markerAnnotations: MutableMap<String, PointAnnotation> get() = bundle!!.markerAnnotations
+  private val markerSignatures: MutableMap<String, String> get() = bundle!!.markerSignatures
+  private val annotationToMarker: MutableMap<String, String> get() = bundle!!.annotationToMarker
   private var lastMarkerPressAt = 0L
   private var lastEmittedMarkerId: String? = null
   private var lastEmittedMarkerAt = 0L
@@ -117,114 +137,129 @@ class MapboxNavigationView(context: Context, appContext: AppContext) : ExpoView(
     MapboxTokenHelper.applyIfNeeded(context)
 
     addView(container, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
-    mapView = MapView(context)
-    container.addView(
-      mapView,
-      FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-    )
-
     currentNight = resolveNight()
-    applyStyle()
-
-    mapView.scalebar.enabled = false
-    mapView.location.apply {
-      setLocationProvider(locationProvider)
-      puckBearingEnabled = true
-      enabled = true
-    }
-    applyPuck()
-
-    // any camera movement not started by us (finger gestures, flyTo…) leaves "following" mode
-    mapView.camera.addCameraAnimationsLifecycleListener(object : CameraAnimationsLifecycleListener {
-      override fun onAnimatorStarting(type: CameraAnimatorType, animator: ValueAnimator, owner: String?) {
-        if (owner != CAMERA_OWNER) emitMode("idle")
-      }
-
-      override fun onAnimatorEnding(type: CameraAnimatorType, animator: ValueAnimator, owner: String?) {}
-
-      override fun onAnimatorCancelling(type: CameraAnimatorType, animator: ValueAnimator, owner: String?) {}
-
-      override fun onAnimatorInterrupting(
-        type: CameraAnimatorType,
-        runningAnimator: ValueAnimator,
-        runningAnimatorOwner: String?,
-        newAnimator: ValueAnimator,
-        newAnimatorOwner: String?,
-      ) {}
-    })
-
-    mapView.gestures.addOnMapClickListener(OnMapClickListener { point ->
-      handleMapClick(point)
-      false
-    })
-    mapView.gestures.addOnMapLongClickListener(OnMapLongClickListener { point ->
-      onMapLongPress(mapOf("latitude" to point.latitude(), "longitude" to point.longitude()))
-      true
-    })
-
-    pointAnnotationManager = mapView.annotations.createPointAnnotationManager()
-    markerManager = mapView.annotations.createPointAnnotationManager().also { manager ->
-      manager.addClickListener(OnPointAnnotationClickListener { annotation ->
-        annotationToMarker[annotation.id]?.let { markerId -> emitMarkerPress(markerId) }
-        true
-      })
-    }
-    applyGestures()
-    onReady(mapOf("ready" to true))
   }
 
   /** Let Android lay out the MapView instead of Yoga. */
   override val shouldUseAndroidLayout: Boolean
     get() = true
 
+  override fun onAttachedToWindow() {
+    super.onAttachedToWindow()
+    // The map is created (or received, when it is shared) only now: every prop, `sharedKey` included, is already here.
+    // Only the FIRST attach takes it: later attaches (a covered screen shown again) never steal a map that moved on.
+    // It is taken one message later, NOT inside the attach: moving a view out of another screen while
+    // react-native-screens / Fragments are still adding this one is what made Android refuse ("child already has a parent").
+    if (bundle == null && !adoptScheduled) {
+      adoptScheduled = true
+      post { adoptMap() }
+    }
+  }
+
+  private fun adoptMap() {
+    adoptScheduled = false
+    if (bundle != null || destroyedByReact || !isAttachedToWindow) return
+    val b = SharedMaps.acquire(sharedKey ?: privateKey, context)
+    bundle = b
+    if (!b.attach(this)) useOwnMap()
+  }
+
+  /** The shared map could not be moved here: build a private one instead (never crash). */
+  internal fun useOwnMap() {
+    val shared = bundle
+    if (shared != null && shared.key == privateKey && shared.host === this) return
+    shared?.hosts?.remove(this)
+    val own = SharedMaps.acquire(privateKey, context)
+    bundle = own
+    own.attach(this)
+  }
+
   override fun onConfigurationChanged(newConfig: Configuration?) {
     super.onConfigurationChanged(newConfig)
     refreshTheme()
   }
 
-  fun cleanup() {
-    runCatching { mapView.onDestroy() }
+  /** Views with the same key share ONE native map (shared element: nothing is created again). */
+  fun setSharedKey(value: String?) {
+    sharedKey = value?.takeIf { it.isNotBlank() }
   }
 
-  // =============================================================== external location (pushed from JS)
-  private class ExternalLocationProvider : LocationProvider {
-    private val consumers = CopyOnWriteArraySet<LocationConsumer>()
-    private var lastPoint: Point? = null
-    private var lastBearing: Double? = null
+  fun cleanup() {
+    destroyedByReact = true
+    val b = bundle ?: return
+    bundle = null
+    b.release(this)
+  }
 
-    override fun registerLocationConsumer(locationConsumer: LocationConsumer) {
-      if (consumers.add(locationConsumer)) {
-        lastPoint?.let { p ->
-          locationConsumer.onLocationUpdated(p, options = { duration = 0 })
-          lastBearing?.let { b -> locationConsumer.onBearingUpdated(b, options = { duration = 0 }) }
-        }
-      }
-    }
+  // ---------------------------------------------------------------- called by the MapBundle
+  /** This view just received the map: push every prop of THIS view into it. */
+  internal fun onMapAdopted() {
+    currentNight = resolveNight()
+    decodePendingImages()
+    applyStyle()
+    applyPuck()
+    bundle?.mapView?.location?.enabled = showsUserLocation
+    applyGestures()
+    updateDestinationPin()
+    syncMarkers()
+    applyRoute()
+    cameraSpec?.let { applyCamera(it) }
+    onReady(mapOf("ready" to true))
+    if (bundle?.mapLoaded == true) onMapLoadedEvent()
+  }
 
-    override fun unRegisterLocationConsumer(locationConsumer: LocationConsumer) {
-      consumers.remove(locationConsumer)
-    }
+  /** The map finished loading (style + tiles): lets JS swap a placeholder picture for the live map. */
+  internal fun onMapLoadedEvent() {
+    onMapLoaded(mapOf("loaded" to true))
+  }
 
-    fun update(point: Point, bearing: Double?, durationMs: Long) {
-      lastPoint = point
-      if (bearing != null) lastBearing = bearing
-      consumers.forEach { consumer ->
-        consumer.onLocationUpdated(point, options = {
-          duration = durationMs
-          interpolator = LinearInterpolator()
-        })
-        if (bearing != null) {
-          consumer.onBearingUpdated(bearing, options = {
-            duration = durationMs
-            interpolator = LinearInterpolator()
-          })
-        }
-      }
-    }
+  internal fun onMapTakenAway() {
+    nativeMode = "idle"
+  }
+
+  internal fun onCameraAnimationStarted(owner: String?) {
+    if (owner != CAMERA_OWNER) emitMode("idle")
+  }
+
+  internal fun onMapTapped(point: Point) {
+    handleMapClick(point)
+  }
+
+  internal fun onMapLongTapped(point: Point) {
+    onMapLongPress(mapOf("latitude" to point.latitude(), "longitude" to point.longitude()))
+  }
+
+  internal fun onAnnotationClicked(annotationId: String) {
+    val markerId = bundle?.annotationToMarker?.get(annotationId) ?: return
+    emitMarkerPress(markerId)
   }
 
   // =============================================================== commands from JS
+  /**
+   * A picture of the map as it is drawn right now (markers included), saved in the cache. Done by the Maps SDK itself:
+   * a GPU surface cannot be photographed with the normal view tools (it comes out black).
+   * Resolves with a `file://` uri.
+   */
+  fun takeSnapshot(promise: Promise) {
+    val b = bundle ?: return promise.reject("NO_MAP", "The map is not ready yet", null)
+    b.mapView.snapshot { bitmap ->
+      if (bitmap == null) {
+        promise.reject("SNAPSHOT_FAILED", "The map returned no picture", null)
+      } else {
+        try {
+          // JPEG: a map picture is opaque and a PNG of it is several times bigger, so it loads and decodes much slower
+          val file = File(context.cacheDir, "mapbox-nav-snapshot-${System.currentTimeMillis()}.jpg")
+          FileOutputStream(file).use { out -> bitmap.compress(Bitmap.CompressFormat.JPEG, 88, out) }
+          promise.resolve(Uri.fromFile(file).toString())
+        } catch (t: Throwable) {
+          promise.reject("SNAPSHOT_FAILED", t.message ?: "Could not save the picture", t)
+        }
+      }
+    }
+  }
+
   fun updateLocation(lat: Double, lng: Double, bearing: Double, durationMs: Double) {
+    if (bundle == null) return
     locationProvider.update(
       Point.fromLngLat(lng, lat),
       bearing.takeIf { it >= 0.0 && it.isFinite() },
@@ -233,6 +268,7 @@ class MapboxNavigationView(context: Context, appContext: AppContext) : ExpoView(
   }
 
   fun followCamera(lat: Double, lng: Double, bearing: Double, zoom: Double, pitch: Double, durationMs: Double) {
+    if (bundle == null) return
     nativeMode = "following"
     val padTop = if (pitch > 0.0) mapView.height * 0.34 else 0.0
     mapView.camera.easeTo(
@@ -251,7 +287,7 @@ class MapboxNavigationView(context: Context, appContext: AppContext) : ExpoView(
   }
 
   fun fitCamera(points: List<List<Double>>, top: Double, right: Double, bottom: Double, left: Double, durationMs: Double) {
-    if (points.size < 2) return
+    if (bundle == null || points.size < 2) return
     val coordinates = points.filter { it.size >= 2 }.map { Point.fromLngLat(it[0], it[1]) }
     if (coordinates.size < 2) return
     nativeMode = "overview"
@@ -295,7 +331,7 @@ class MapboxNavigationView(context: Context, appContext: AppContext) : ExpoView(
 
   fun setRouteProgress(fraction: Double) {
     routeTrim = fraction.coerceIn(0.0, 1.0)
-    val style = mapView.mapboxMap.style ?: return
+    val style = bundle?.mapView?.mapboxMap?.style ?: return
     val value = Value.fromJson("[0.0,$routeTrim]").value ?: return
     if (style.styleLayerExists(ROUTE_LINE)) style.setStyleLayerProperty(ROUTE_LINE, "line-trim-offset", value)
     if (style.styleLayerExists(ROUTE_CASING)) style.setStyleLayerProperty(ROUTE_CASING, "line-trim-offset", value)
@@ -307,7 +343,7 @@ class MapboxNavigationView(context: Context, appContext: AppContext) : ExpoView(
     alternativesGeoJson = null
     routeTrim = 0.0
     updateDestinationPin()
-    val style = mapView.mapboxMap.style ?: return
+    val style = bundle?.mapView?.mapboxMap?.style ?: return
     removeRouteLayers(style)
   }
 
@@ -318,7 +354,7 @@ class MapboxNavigationView(context: Context, appContext: AppContext) : ExpoView(
 
   /** Idempotent: (re)creates sources and layers from the last route data. Called again after a style change. */
   private fun applyRoute() {
-    val style = mapView.mapboxMap.style ?: return
+    val style = bundle?.mapView?.mapboxMap?.style ?: return
     val geo = routeGeoJson
     if (geo == null) {
       removeRouteLayers(style)
@@ -414,7 +450,7 @@ class MapboxNavigationView(context: Context, appContext: AppContext) : ExpoView(
 
   fun setShowsUserLocation(value: Boolean) {
     showsUserLocation = value
-    mapView.location.enabled = value
+    bundle?.mapView?.location?.enabled = value
   }
 
   fun setShowDestinationPin(value: Boolean) {
@@ -433,6 +469,7 @@ class MapboxNavigationView(context: Context, appContext: AppContext) : ExpoView(
   fun setPitchEnabled(value: Boolean) { pitchEnabled = value; applyGestures() }
 
   private fun applyGestures() {
+    if (bundle == null) return
     mapView.gestures.updateSettings {
       scrollEnabled = this@MapboxNavigationView.scrollEnabled
       rotateEnabled = this@MapboxNavigationView.rotateEnabled
@@ -466,6 +503,7 @@ class MapboxNavigationView(context: Context, appContext: AppContext) : ExpoView(
   }
 
   private fun applyStyle() {
+    if (bundle == null) return
     val uri = resolveStyleUri(currentNight)
     if (uri == loadedStyleUri) return
     loadedStyleUri = uri
@@ -480,6 +518,7 @@ class MapboxNavigationView(context: Context, appContext: AppContext) : ExpoView(
 
   // =============================================================== vehicle puck (3D FS models)
   private fun applyPuck() {
+    if (bundle == null) return
     val scale = vehicleScale.toFloat()
     val rotation = vehicleRotation.toFloat()
     mapView.location.locationPuck = when (vehicle) {
@@ -513,7 +552,9 @@ class MapboxNavigationView(context: Context, appContext: AppContext) : ExpoView(
 
   fun applyCamera(spec: CameraSpec?) {
     if (spec == null) return
+    cameraSpec = spec // re-applied whenever this view receives the (shared) map
     cameraControlledByJs = true
+    if (bundle == null) return
 
     if (spec.minZoomLevel != null || spec.maxZoomLevel != null) {
       val bounds = CameraBoundsOptions.Builder()
@@ -567,16 +608,22 @@ class MapboxNavigationView(context: Context, appContext: AppContext) : ExpoView(
 
   /** icon key -> base64 PNG (captured from the SVG children in JS, once per key). */
   fun setMarkerImages(value: Map<String, String>?) {
-    val images = value ?: emptyMap()
-    markerBitmaps.keys.retainAll(images.keys)
-    images.forEach { (key, base64) ->
-      if (base64.isBlank() || markerBitmaps.containsKey(key)) return@forEach
+    pendingImages = value ?: emptyMap()
+    if (bundle == null) return
+    decodePendingImages()
+    syncMarkers()
+  }
+
+  /** The decoded pictures are shared by every view that uses the same map: a second view never decodes them again. */
+  private fun decodePendingImages() {
+    val cache = bundle?.markerBitmaps ?: return
+    pendingImages.forEach { (key, base64) ->
+      if (base64.isBlank() || cache.containsKey(key)) return@forEach
       runCatching {
         val bytes = Base64.decode(base64, Base64.DEFAULT)
         BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-      }.getOrNull()?.let { markerBitmaps[key] = it }
+      }.getOrNull()?.let { cache[key] = it }
     }
-    syncMarkers()
   }
 
   private fun anchorFor(x: Double, y: Double): IconAnchor {

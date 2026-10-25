@@ -107,6 +107,12 @@ export type ReadyEvent = { ready: boolean };
 // ------------------------------------------------------------------ view props / ref
 export type MapboxNavigationViewProps = {
   style?: StyleProp<ViewStyle>;
+  /**
+   * Shared element: views with the same key share ONE native map. When a second view with that key mounts (another
+   * screen), the already loaded map moves into it (nothing is created or loaded again); when it unmounts the map goes
+   * back to the first one. See `SharedMapCard` / `SharedMapExpand` (`expo-mapbox-nav/shared`).
+   */
+  sharedKey?: string;
   /** <Marker/> and <Camera/> elements. */
   children?: ReactNode;
   /** Same as a <Camera/> child, as a prop. */
@@ -175,6 +181,8 @@ export type MapboxNavigationViewProps = {
   muted?: boolean;
 
   onReady?: (event: ReadyEvent) => void;
+  /** The map drew a complete frame (style + tiles). Use it to swap a placeholder picture for the live map. */
+  onMapLoaded?: (event: { loaded: boolean }) => void;
   onLocation?: (event: LocationEvent) => void;
   onRouteReady?: (event: RouteReadyEvent) => void;
   onRouteError?: (event: ErrorEvent) => void;
@@ -202,4 +210,9 @@ export type MapboxNavigationViewRef = {
   recenter: () => Promise<void>;
   /** Shows the whole route. */
   showOverview: () => Promise<void>;
+  /**
+   * A picture of the map as it is drawn right now (markers included), as a `file://` uri. Made by the Maps SDK itself,
+   * so it is never black (a GPU surface cannot be photographed with the normal view tools).
+   */
+  takeSnapshot: () => Promise<string>;
 };

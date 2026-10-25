@@ -107,7 +107,7 @@ Every `<Marker>` child (an SVG) is rasterised **once per `iconKey`** and drawn i
 
 ### View props
 
-`styleURL`, `mapStyle`, `theme`, `units`, `origin`, `destination`, `waypoints`, `profile`, `language`, `alternatives`, `accessToken`, `routeProvider`, `simulate`, `simulationSpeed`, `muted`, `vehicle`, `vehicleScale` (1–100), `vehicleRotation`, `showsUserLocation`, `showDestinationPin`, `zoomEnabled`, `scrollEnabled`, `rotateEnabled`, `pitchEnabled`, `zoomControlEnabled` (no-op), `camera`.
+`sharedKey`, `styleURL`, `mapStyle`, `theme`, `units`, `origin`, `destination`, `waypoints`, `profile`, `language`, `alternatives`, `accessToken`, `routeProvider`, `simulate`, `simulationSpeed`, `muted`, `vehicle`, `vehicleScale` (1–100), `vehicleRotation`, `showsUserLocation`, `showDestinationPin`, `zoomEnabled`, `scrollEnabled`, `rotateEnabled`, `pitchEnabled`, `zoomControlEnabled` (no-op), `camera`.
 
 ### Events
 
@@ -116,6 +116,55 @@ Every `<Marker>` child (an SVG) is rasterised **once per `iconKey`** and drawn i
 ### Ref commands
 
 `fetchRoute()`, `startNavigation()`, `stopNavigation()`, `recenter()`, `showOverview()`, `setCamera({...})`.
+
+
+## Maps that take their own picture (no image files)
+
+A live map is a GPU surface: a normal screenshot of it comes out black (screen transitions photograph screens, so they
+hit this), and it needs a moment to load. The Maps SDK itself can take a picture of the map, so:
+
+- `ref.takeSnapshot()` → a `file://` picture of the map as it is drawn (markers included), made by the Maps SDK.
+- `<FrozenMap snapshotKey="office">`: a card with a map that is live ONLY ONCE: it loads, takes its own picture and
+  turns into that picture (no GPU after that). One picture per theme (light / dark).
+- `<MapWithCover coverKey="office">`: a map that is shown at once: the picture of `FrozenMap` first, the live map fades
+  in over it as soon as it is loaded (`onMapLoaded`).
+
+```tsx
+// first screen: the card
+<FrozenMap snapshotKey="office" style={{ height: 280 }} mapStyle="streets">
+  <Camera zoomLevel={3} centerCoordinate={[44.7, 34.7]} animationMode="moveTo" />
+  <Marker … />
+</FrozenMap>
+const ready = useMapSnapshotReady('office');   // true once the card has its picture
+
+// second screen: same picture as placeholder, then the live map. `coverCamera` = the view the card shows: the live map
+// starts EXACTLY there (zoom corrected for the bigger screen), never at the SDK's default view (New York).
+const ref = useRef<MapWithCoverRef>(null);
+<MapWithCover
+  ref={ref}
+  coverKey="office"
+  coverCamera={{ centerCoordinate: [44.7, 34.7], zoomLevel: 3 }}
+  mount={!transitionRunning}
+  onCoverLoaded={() => setReady(true)}
+  showsUserLocation
+/>
+ref.current?.showCover();   // right before the screen is photographed: shows the picture, not the live map
+```
+
+### With `expo-delivery-transitions` (the `cardExpand` App-Store card)
+
+That library photographs the old and the new screen. So: the card is a `FrozenMap` (enable the press with
+`useMapSnapshotReady`), the second screen shows `MapWithCover coverKey` with `mount={false}` while the transition runs
+(`isTransitionRunning()`) and tells it `useTransitionReady(coverLoaded)`; then `mount` and the live map replaces the
+picture. Call `showCover()` before going back (the back animation photographs the screen).
+See `fs-v3/` in the repository.
+
+**Experimental: `sharedKey`.** Views with the same key share one native map that is moved between them. A GPU surface that
+is moved is blank for a moment, so it is not recommended.
+
+**Android lifecycle fix (all maps):** Maps SDK 11 followed the lifecycle of the react-native-screens Fragment, so a map
+on a screen that was covered by another one was destroyed and came back **black**. Maps now have a lifecycle of their
+own, destroyed only when the last view that uses them is removed: no more `useFocusEffect` + unmount workaround.
 
 ## Notes
 
