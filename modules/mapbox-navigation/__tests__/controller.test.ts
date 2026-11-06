@@ -60,11 +60,40 @@ function setup(opts: { simulate?: boolean; failProvider?: boolean } = {}) {
   });
   c.setProps({ destination: { latitude: 36.02, longitude: 44.03 }, simulate: opts.simulate, simulationSpeed: 1 });
   c.start();
+  c.setLocate(true); // what <MapboxNavigationView showsUserLocation/> does
   return { c, calls, events, spoken, emitFix: (f: Fix) => watcher!(f), modes, providerCalls: () => providerCalls };
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const gps = { lat: 36.0, lng: 44.0, heading: 90, speed: 0, accuracy: 5 };
+
+describe('controller location watch', () => {
+  it('does not start a GPS watch on its own, only when the puck is wanted', () => {
+    const t = setup();
+    t.c.setLocate(false);
+    // setup() already asked for it; stopping must remove the watch and a new request must start a browse watch again
+    t.c.setLocate(true);
+    assert.equal(t.modes.at(-1), 'browse');
+  });
+
+  it('a controller that never asked for location never subscribes', () => {
+    const modes: string[] = [];
+    const c = new NavigationController({
+      native: () => null,
+      getToken: () => 'x',
+      watchLocation: (_cb, mode) => {
+        modes.push(mode);
+        return { remove() {} };
+      },
+      speak: () => {},
+      stopSpeaking: () => {},
+    } as any);
+    c.start();
+    c.setLocate(false);
+    assert.deepEqual(modes, []);
+    c.dispose();
+  });
+});
 
 describe('controller', () => {
   it('starts the route line in front of the vehicle (never under it)', async () => {

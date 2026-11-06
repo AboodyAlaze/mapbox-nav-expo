@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import type { RouteProvider } from './engine/directions';
-import type { StyleProp, ViewStyle } from 'react-native';
+import type { ImageSourcePropType, StyleProp, ViewStyle } from 'react-native';
 
 export type Coordinate = {
   latitude: number;
@@ -26,6 +26,8 @@ export type CameraProps = {
   maxZoomLevel?: number;
 };
 
+export type MarkerSize = number | { width: number; height: number };
+
 export type MarkerProps = {
   /** Stable id (defaults to the React key). */
   id?: string;
@@ -33,13 +35,22 @@ export type MarkerProps = {
   /** Anchor of the icon, like react-native-maps. Default { x: 0.5, y: 1 } (bottom-center). */
   anchor?: { x: number; y: number };
   /**
-   * Markers sharing the same `iconKey` share ONE rasterised image (rendered once).
-   * Use it for lists of identical markers – it is what keeps hundreds of markers fast.
-   * Defaults to a per-marker key.
+   * The marker's picture as raw SVG markup. It is drawn NATIVELY (vector, sharp at any density) once per distinct
+   * SVG + size and cached for the whole app: no react-native-svg view, no screenshot, no base64.
+   * See `MapIcons` (`expo-mapbox-nav`) for ready-made ones.
    */
+  svg?: string;
+  /** Or a bitmap: `require('./pin.png')` or `{ uri }`. Give it a `size`. */
+  image?: ImageSourcePropType;
+  /** Size in dp (a number = square). Default for `svg`: the SVG's own width/height. */
+  size?: MarkerSize;
+  /** Markers sharing the same key share one picture. Optional: derived from `svg`/`image` + `size` when omitted. */
   iconKey?: string;
   onPress?: () => void;
-  /** The marker's look – typically a react-native-svg <Svg/>. Rendered once and drawn natively on the map. */
+  /**
+   * @deprecated Android ignores children (they needed react-native-svg + a screenshot, which is what made the map slow).
+   * Use `svg` / `image`. Still honoured on iOS.
+   */
   children?: ReactNode;
 };
 
@@ -134,6 +145,21 @@ export type MapboxNavigationViewProps = {
   /** Tilt the map. Default true. */
   pitchEnabled?: boolean;
 
+
+  /**
+   * Pause the map's rendering while its screen is not focused (another screen is on top, or another tab is shown), and
+   * resume it when it comes back. Makes the surface teardown at the end of a navigation cheap. Default true.
+   */
+  pauseWhenBlurred?: boolean;
+  /** Force-pause the map's rendering (it keeps showing the last frame). */
+  paused?: boolean;
+  /**
+   * Mount the native map only after the current navigation transition / interactions are done, showing a plain
+   * background meanwhile. Keeps the first frames of a screen transition free of map creation. Default true.
+   */
+  deferMount?: boolean;
+  /** Background shown until the map is mounted (when `deferMount`). Default: a neutral map-like color for the theme. */
+  placeholderColor?: string;
 
   /** Full Mapbox style URL. Overrides `mapStyle` + `theme` when set. */
   styleURL?: string;

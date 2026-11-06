@@ -115,6 +115,7 @@ export class NavigationController {
   private legIndex = 0;
   private centered = false;
   private disposed = false;
+  private locate = false;
 
   constructor(private readonly deps: ControllerDeps) {}
 
@@ -146,8 +147,29 @@ export class NavigationController {
   }
 
   // ------------------------------------------------------------------ lifecycle
-  start() {
-    this.subscribe('browse');
+  /**
+   * Nothing is subscribed here any more: a High-accuracy GPS watch used to start for EVERY map, even a static card
+   * with `showsUserLocation={false}`. The watch now starts when the puck is wanted (`setLocate(true)`) or when a route /
+   * navigation needs a position (`ensureWatch`).
+   */
+  start() {}
+
+  /** `showsUserLocation` on/off: starts or stops the browse-mode watch (never touches a running navigation). */
+  setLocate(on: boolean) {
+    if (this.disposed) return;
+    this.locate = on;
+    if (on) {
+      if (!this.watch) this.subscribe('browse');
+    } else if (!this.navigating && !this.pendingStart && this.watchMode === 'browse') {
+      this.watch?.remove();
+      this.watch = null;
+      this.watchMode = null;
+    }
+  }
+
+  /** A route request without `origin` needs a GPS fix: make sure a watch is running. */
+  private ensureWatch() {
+    if (!this.watch && !this.disposed) this.subscribe('browse');
   }
 
   dispose() {
@@ -261,6 +283,7 @@ export class NavigationController {
         ? ([this.lastRealFix.lng, this.lastRealFix.lat] as LngLat)
         : null;
     if (!startPoint) {
+      this.ensureWatch();
       return this.events.onRouteError?.({
         code: 'NO_ORIGIN',
         message: 'Waiting for a GPS fix – pass `origin` or try again in a moment',
@@ -380,7 +403,13 @@ export class NavigationController {
     this.native?.clearRoute();
     this.deps.stopSpeaking();
     this.deps.keepAwake?.(false);
-    this.subscribe('browse');
+    if (this.locate) {
+      this.subscribe('browse');
+    } else {
+      this.watch?.remove();
+      this.watch = null;
+      this.watchMode = null;
+    }
     this.setCameraMode('idle');
     this.recenter();
     if (was) this.events.onNavigationStopped?.({ reason: 'stopped' });

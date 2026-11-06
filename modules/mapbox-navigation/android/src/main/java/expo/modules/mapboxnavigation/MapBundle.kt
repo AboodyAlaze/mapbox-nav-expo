@@ -48,7 +48,21 @@ internal class HolderLifecycleOwner : LifecycleOwner {
     registry.currentState = Lifecycle.State.RESUMED
   }
 
+  private var destroyed = false
+
+  /** Stops the map's rendering (it keeps showing its last frame). No-op once destroyed. */
+  fun pause() {
+    if (destroyed) return
+    if (registry.currentState.isAtLeast(Lifecycle.State.STARTED)) registry.currentState = Lifecycle.State.CREATED
+  }
+
+  fun resume() {
+    if (destroyed) return
+    if (registry.currentState != Lifecycle.State.RESUMED) registry.currentState = Lifecycle.State.RESUMED
+  }
+
   fun destroy() {
+    destroyed = true
     registry.currentState = Lifecycle.State.DESTROYED
   }
 }
@@ -120,6 +134,25 @@ internal class MapBundle(val key: String, context: Context) {
   val annotationToMarker = mutableMapOf<String, String>()
 
   private var destroyed = false
+  private var pausedByProp = false
+  private var pausedByDetach = false
+
+  /** `paused` prop of the host that owns the map. */
+  fun setPausedByProp(value: Boolean) {
+    pausedByProp = value
+    applyLifecycle()
+  }
+
+  /** The owning host left the window (its screen was covered): stop drawing until it is back. */
+  fun setPausedByDetach(value: Boolean) {
+    pausedByDetach = value
+    applyLifecycle()
+  }
+
+  private fun applyLifecycle() {
+    if (destroyed) return
+    if (pausedByProp || pausedByDetach) lifecycleOwner.pause() else lifecycleOwner.resume()
+  }
 
   private companion object {
     const val TAG = "ExpoMapboxNav"
@@ -234,6 +267,8 @@ internal class MapBundle(val key: String, context: Context) {
 
     if (!hosts.contains(newHost)) hosts.add(newHost)
     host = newHost
+    pausedByDetach = false
+    applyLifecycle()
     old?.onMapTakenAway()
     newHost.onMapAdopted()
     return true

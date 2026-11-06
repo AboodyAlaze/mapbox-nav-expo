@@ -38,6 +38,23 @@ class MarkerRecord : Record {
   var anchorY: Double = 1.0
 }
 
+class IconRecord : Record {
+  @Field
+  var key: String = ""
+
+  @Field
+  var svg: String? = null
+
+  @Field
+  var uri: String? = null
+
+  @Field
+  var width: Double = 0.0
+
+  @Field
+  var height: Double = 0.0
+}
+
 class CameraRecord : Record {
   @Field
   var centerCoordinate: List<Double>? = null
@@ -130,6 +147,12 @@ class MapboxNavigationModule : Module() {
         )
       }
       Prop("markerImages") { view: MapboxNavigationView, value: Map<String, String>? -> view.setMarkerImages(value) }
+      // pictures drawn natively from SVG markup / image uris (replaces the base64 screenshots)
+      Prop("markerIcons") { view: MapboxNavigationView, value: List<IconRecord>? ->
+        view.setMarkerIcons(value?.map { IconSpec(it.key, it.svg, it.uri, it.width, it.height) })
+      }
+      // rendering is paused while the screen is covered: the surface teardown at the end of a transition is then cheap
+      Prop("paused") { view: MapboxNavigationView, value: Boolean? -> view.setPaused(value ?: false) }
 
       // ---- primitives driven by the TypeScript NavigationController
       AsyncFunction("updateLocation") { view: MapboxNavigationView, lat: Double, lng: Double, bearing: Double, _accuracy: Double, duration: Double ->

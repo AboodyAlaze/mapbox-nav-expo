@@ -12,3 +12,5 @@ export * from './src/MapboxNavigation.types';
 export * from './src/ui/NavigationUI';
 export { NavigationController } from './src/NavigationController';
 export * from './src/engine';
+export { MapIcons } from './src/icons';
+export type { MapIcon } from './src/icons';

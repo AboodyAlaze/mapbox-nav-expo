@@ -110,6 +110,8 @@ class MapboxNavigationView(context: Context, appContext: AppContext) : ExpoView(
     }
   private var cameraSpec: CameraSpec? = null
   private var pendingImages: Map<String, String> = emptyMap()
+  private var pendingIcons: List<IconSpec> = emptyList()
+  private var pausedByProp = false
   private var currentNight = false
   private var nativeMode = "idle"
   private var cameraControlledByJs = false
@@ -144,8 +146,15 @@ class MapboxNavigationView(context: Context, appContext: AppContext) : ExpoView(
   override val shouldUseAndroidLayout: Boolean
     get() = true
 
+  override fun onDetachedFromWindow() {
+    super.onDetachedFromWindow()
+    // The screen was covered / removed: stop the map drawing while it has no surface (resumed when it is attached again)
+    bundle?.takeIf { it.host === this }?.setPausedByDetach(true)
+  }
+
   override fun onAttachedToWindow() {
     super.onAttachedToWindow()
+    bundle?.takeIf { it.host === this }?.setPausedByDetach(false)
     // The map is created (or received, when it is shared) only now: every prop, `sharedKey` included, is already here.
     // Only the FIRST attach takes it: later attaches (a covered screen shown again) never steal a map that moved on.
     // It is taken one message later, NOT inside the attach: moving a view out of another screen while
@@ -196,6 +205,8 @@ class MapboxNavigationView(context: Context, appContext: AppContext) : ExpoView(
   internal fun onMapAdopted() {
     currentNight = resolveNight()
     decodePendingImages()
+    loadIcons()
+    bundle?.setPausedByProp(pausedByProp)
     applyStyle()
     applyPuck()
     bundle?.mapView?.location?.enabled = showsUserLocation
@@ -606,7 +617,33 @@ class MapboxNavigationView(context: Context, appContext: AppContext) : ExpoView(
     syncMarkers()
   }
 
-  /** icon key -> base64 PNG (captured from the SVG children in JS, once per key). */
+  /** `paused` prop: stops / resumes the map's rendering (it keeps showing the last frame). */
+  fun setPaused(value: Boolean) {
+    pausedByProp = value
+    // a shared map answers to the host that currently shows it only (onMapAdopted re-applies it when it moves)
+    bundle?.takeIf { it.host === this }?.setPausedByProp(value)
+  }
+
+  /** Pictures for the markers (SVG markup / image uris), drawn natively once per app and shared by every map. */
+  internal fun setMarkerIcons(value: List<IconSpec>?) {
+    pendingIcons = value ?: emptyList()
+    if (bundle != null) loadIcons()
+  }
+
+  private fun loadIcons() {
+    val b = bundle ?: return
+    pendingIcons.forEach { spec ->
+      if (b.markerBitmaps.containsKey(spec.key)) return@forEach
+      MarkerIcons.obtain(context, spec) { bitmap ->
+        if (bitmap != null && !b.markerBitmaps.containsKey(spec.key)) {
+          b.markerBitmaps[spec.key] = bitmap
+          if (bundle === b) syncMarkers()
+        }
+      }
+    }
+  }
+
+  /** icon key -> base64 PNG (legacy path, iOS only: captured from the SVG children in JS, once per key). */
   fun setMarkerImages(value: Map<String, String>?) {
     pendingImages = value ?: emptyMap()
     if (bundle == null) return

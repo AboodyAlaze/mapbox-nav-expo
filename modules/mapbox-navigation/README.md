@@ -197,3 +197,16 @@ const provider: RouteProvider = {
 npm test      # engine + controller unit tests (no device needed)
 npm run build # compile TypeScript to build/
 ```
+
+
+## 2.6.0 – native marker icons, quieter map
+
+- **Marker pictures are native.** `<Marker svg="<svg …/>" size={38} />`, `<Marker image={require('./pin.png')} size={40} />` or the ready-made
+  `<Marker {...MapIcons.building} />` / `MapIcons.fib`. SVG markup is drawn as vector by AndroidSVG once per app (cache shared by every
+  map). The old way (children rendered off-screen with react-native-svg + `react-native-view-shot`) is iOS-only now.
+- **GPS only when needed.** No location watch is started for maps with `showsUserLocation={false}`; the browse watch is Balanced
+  accuracy, navigation keeps BestForNavigation.
+- **`pauseWhenBlurred` (default true) / `paused`.** Rendering stops while the screen is covered, so the surface teardown at the end of a
+  transition is cheap. Needs `@react-navigation/native` (already there with expo-router).
+- **`deferMount` (default true).** The native map mounts after the transition/interactions (max 900 ms), a plain `placeholderColor`
+  background is shown meanwhile.
