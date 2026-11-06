@@ -4,7 +4,12 @@ import * as Location from 'expo-location';
 import * as Speech from 'expo-speech';
 import * as React from 'react';
 import { NavigationContext } from '@react-navigation/native';
-import { Image, InteractionManager, Platform, StyleSheet, Text, useColorScheme, View } from 'react-native';
+import * as ReactNative from 'react-native';
+import { Image, Platform, StyleSheet, Text, useColorScheme, View } from 'react-native';
+
+// InteractionManager is deprecated / missing in recent React Native versions: never assume it exists.
+const getInteractionManager = (): { runAfterInteractions?: (task: () => void) => { cancel?: () => void } } | undefined =>
+  (ReactNative as any).InteractionManager;
 
 import type { Fix } from './engine/engine';
 import { getAccessToken, isNativeModuleAvailable } from './MapboxNavigationModule';
@@ -213,11 +218,17 @@ export default function MapboxNavigationView({
       done = true;
       setMounted(true);
     };
-    const handle = InteractionManager.runAfterInteractions(go);
-    const timer = setTimeout(go, 900); // never wait forever for a long-running interaction
+    let handle: { cancel?: () => void } | undefined;
+    try {
+      handle = getInteractionManager()?.runAfterInteractions?.(go);
+    } catch {
+      handle = undefined;
+    }
+    // never wait forever for a long-running interaction; without InteractionManager wait about one transition
+    const timer = setTimeout(go, handle ? 900 : 350);
     return () => {
       done = true;
-      handle.cancel();
+      handle?.cancel?.();
       clearTimeout(timer);
     };
   }, [mounted]);

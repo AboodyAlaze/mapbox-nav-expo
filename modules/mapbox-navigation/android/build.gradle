@@ -4,7 +4,7 @@ plugins {
 }
 
 group = 'expo.modules.mapboxnavigation'
-version = '2.6.0'
+version = '2.6.1'
 
 // ---------------------------------------------------------------------------
 // Mapbox Maven repository (Maps SDK). Added on rootProject.allprojects so the transitive
@@ -38,7 +38,7 @@ android {
   namespace "expo.modules.mapboxnavigation"
   defaultConfig {
     versionCode 1
-    versionName "2.6.0"
+    versionName "2.6.1"
   }
   lintOptions {
     abortOnError false

@@ -1,6 +1,6 @@
 {
   "name": "expo-mapbox-nav",
-  "version": "2.6.0",
+  "version": "2.6.1",
   "description": "Mapbox map + turn-by-turn navigation for Expo (Android + iOS). Navigation runs in TypeScript (Directions API) – no Navigation SDK, no per-user navigation billing.",
   "main": "build/index.js",
   "react-native": "index.ts",
